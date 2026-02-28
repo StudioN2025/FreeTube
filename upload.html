@@ -102,6 +102,16 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        .format-info {
+            margin-top: 10px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .format-info i {
+            color: #ff0000;
+        }
     </style>
     
     <!-- Конфигурация Supabase -->
@@ -274,30 +284,14 @@
 
         // Функция выхода
         window.logout = async function() {
-            await supabaseHelpers.signOut();
-            localStorage.removeItem('user');
-            showNotification('Вы вышли из системы', 'info');
-            setTimeout(() => {
+            try {
+                await supabaseHelpers.signOut();
+                localStorage.removeItem('user');
+                alert('Вы вышли из системы');
                 window.location.href = 'login.html';
-            }, 1500);
-        };
-
-        // Функция показа уведомлений
-        window.showNotification = function(message, type = 'info') {
-            const existingNotification = document.querySelector('.notification');
-            if (existingNotification) {
-                existingNotification.remove();
+            } catch (error) {
+                console.error('Ошибка при выходе:', error);
             }
-            
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
         };
 
         // Тестируем соединение
@@ -326,8 +320,9 @@
                 <div class="upload-icon">📹</div>
                 <p>Нажмите для выбора видео или перетащите файл сюда</p>
                 <small>Максимальный размер: 100 МБ</small>
-                <br>
-                <small>Поддерживаемые форматы: MP4, WebM, OGG, MOV</small>
+                <div class="format-info">
+                    <i>Поддерживаемые форматы: MP4, WebM, OGG, MOV</i>
+                </div>
             </div>
         </div>
 
