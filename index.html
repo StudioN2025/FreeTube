@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FreeTube - Бесплатное видео</title>
+    <title>FreeTube</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Подключаем Appwrite SDK с правильным URL -->
     <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1/dist/umd/sdk.js"></script>
 </head>
 <body>
@@ -13,34 +12,27 @@
         <h1>🎬 FreeTube</h1>
         <nav>
             <a href="index.html">Главная</a>
-            <a href="upload.html">Загрузить видео</a>
+            <a href="upload.html">Загрузить</a>
         </nav>
     </header>
 
     <main>
         <h2>Рекомендации</h2>
         <div id="video-grid" class="video-grid">
-            <!-- Сюда JavaScript загрузит видео -->
             <p>Загрузка видео...</p>
         </div>
     </main>
 
-    <!-- Сначала проверяем загрузку SDK, потом загружаем видео -->
     <script src="app.js"></script>
     <script>
-        // Ждем загрузки DOM и проверяем SDK
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM загружен, проверяем Appwrite...');
-            
-            // Проверяем наличие Appwrite
-            if (typeof Appwrite !== 'undefined') {
-                console.log('✅ Appwrite SDK загружен');
-                // Загружаем видео
+            console.log('Страница загружена');
+            if (typeof loadVideos === 'function') {
                 loadVideos();
             } else {
-                console.error('❌ Appwrite SDK не загружен');
+                console.error('loadVideos не найдена');
                 document.getElementById('video-grid').innerHTML = 
-                    '<p>❌ Ошибка загрузки SDK. Проверьте подключение к интернету.</p>';
+                    '<p>❌ Ошибка загрузки скрипта</p>';
             }
         });
     </script>
