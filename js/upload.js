@@ -1,41 +1,75 @@
-// upload.js использует конфигурацию из supabase.js
+// js/upload.js
+
+// Проверяем загрузку supabaseHelpers при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Страница загрузки инициализирована');
+    
+    // Проверяем наличие supabaseHelpers
+    if (typeof supabaseHelpers === 'undefined') {
+        console.error('❌ supabaseHelpers не загружен!');
+        showNotification('Ошибка загрузки конфигурации Supabase', 'error');
+        return;
+    }
+    
+    console.log('✅ supabaseHelpers загружен');
+    initializeUpload();
+});
+
+// Инициализация функций загрузки
+function initializeUpload() {
+    const uploadArea = document.getElementById('uploadArea');
+    const videoInput = document.getElementById('videoInput');
+    const uploadForm = document.getElementById('uploadForm');
+    
+    if (uploadArea) {
+        uploadArea.addEventListener('click', () => {
+            videoInput.click();
+        });
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.target.style.borderColor = '#ff0000';
+        });
+
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.target.style.borderColor = '#ccc';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.target.style.borderColor = '#ccc';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) {
+                handleVideoSelect(file);
+            }
+        });
+    }
+
+    if (videoInput) {
+        videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleVideoSelect(file);
+            }
+        });
+    }
+
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await uploadVideo();
+        });
+    }
+}
 
 let selectedFile = null;
 let videoDuration = 0;
 
-// Обработка загрузки файла
-document.getElementById('uploadArea').addEventListener('click', () => {
-    document.getElementById('videoInput').click();
-});
-
-document.getElementById('uploadArea').addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.target.style.borderColor = '#ff0000';
-});
-
-document.getElementById('uploadArea').addEventListener('dragleave', (e) => {
-    e.target.style.borderColor = '#ccc';
-});
-
-document.getElementById('uploadArea').addEventListener('drop', (e) => {
-    e.preventDefault();
-    e.target.style.borderColor = '#ccc';
-    
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('video/')) {
-        handleVideoSelect(file);
-    }
-});
-
-document.getElementById('videoInput').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        handleVideoSelect(file);
-    }
-});
-
 // Обработка выбранного видео
 async function handleVideoSelect(file) {
+    console.log('Выбран файл:', file.name);
+    
     // Проверка размера (макс 100 МБ)
     if (file.size > 100 * 1024 * 1024) {
         alert('Файл слишком большой. Максимальный размер: 100 МБ');
@@ -109,14 +143,18 @@ async function generateThumbnail(videoFile) {
 }
 
 // Загрузка видео
-document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
+async function uploadVideo() {
     const title = document.getElementById('title').value;
     const description = document.getElementById('description').value;
     
     if (!title || !selectedFile) {
         alert('Заполните все поля');
+        return;
+    }
+    
+    // Проверяем наличие supabaseHelpers
+    if (typeof supabaseHelpers === 'undefined') {
+        alert('Ошибка конфигурации. Пожалуйста, обновите страницу.');
         return;
     }
     
@@ -151,17 +189,15 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         const videoBase64 = await convertVideoToBase64(selectedFile);
         
         // Анимируем прогресс
-        for (let i = 50; i <= 80; i += 10) {
-            setTimeout(() => {
-                progressFill.style.width = i + '%';
-                progressText.textContent = i + '% - Загрузка...';
-            }, (i - 40) * 100);
-        }
+        progressFill.style.width = '60%';
+        progressText.textContent = '60% - Подготовка...';
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        progressFill.style.width = '80%';
+        progressText.textContent = '80% - Сохранение...';
         
         // Шаг 3: Сохраняем в Supabase
-        progressFill.style.width = '90%';
-        progressText.textContent = '90% - Сохранение...';
-        
         const videoData = {
             title: title,
             description: description,
@@ -173,6 +209,7 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             user_id: user.id
         };
         
+        console.log('Отправка данных в Supabase...');
         const { data, error } = await supabaseHelpers.insertVideo(videoData);
         
         if (error) throw error;
@@ -180,7 +217,6 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         progressFill.style.width = '100%';
         progressText.textContent = '100% - Готово!';
         
-        // Показываем успешное сообщение
         showNotification('Видео успешно загружено!', 'success');
         
         setTimeout(() => {
@@ -189,17 +225,24 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         
     } catch (error) {
         console.error('Ошибка загрузки:', error);
-        alert('Ошибка при загрузке видео: ' + error.message);
+        showNotification('Ошибка при загрузке видео: ' + error.message, 'error');
         
         progressBar.style.display = 'none';
         uploadBtn.disabled = false;
         uploadBtn.querySelector('.btn-text').style.display = 'inline';
         uploadBtn.querySelector('.loading-spinner').style.display = 'none';
     }
-});
+}
 
 // Показать уведомление
 function showNotification(message, type = 'info') {
+    // Удаляем предыдущее уведомление если есть
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Создаем уведомление
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
@@ -208,15 +251,17 @@ function showNotification(message, type = 'info') {
         top: 20px;
         right: 20px;
         padding: 15px 20px;
-        background: ${type === 'success' ? '#4caf50' : '#ff4444'};
+        background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#ff4444' : '#2196f3'};
         color: white;
         border-radius: 8px;
         z-index: 9999;
         animation: slideIn 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     `;
     
     document.body.appendChild(notification);
     
+    // Удаляем через 3 секунды
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => notification.remove(), 300);
