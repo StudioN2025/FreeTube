@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Проверяем наличие supabaseHelpers
     if (typeof supabaseHelpers === 'undefined') {
         console.error('❌ supabaseHelpers не загружен!');
-        showNotification('Ошибка загрузки конфигурации Supabase', 'error');
+        alert('Ошибка загрузки конфигурации Supabase');
         return;
     }
     
@@ -75,14 +75,14 @@ async function handleVideoSelect(file) {
     
     // Проверка размера (макс 100 МБ)
     if (file.size > 100 * 1024 * 1024) {
-        showNotification('Файл слишком большой. Максимальный размер: 100 МБ', 'error');
+        alert('Файл слишком большой. Максимальный размер: 100 МБ');
         return;
     }
     
     // Проверка формата
     const validTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
     if (!validTypes.includes(file.type)) {
-        showNotification('Неподдерживаемый формат видео. Используйте MP4, WebM, OGG или MOV', 'error');
+        alert('Неподдерживаемый формат видео. Используйте MP4, WebM, OGG или MOV');
         return;
     }
     
@@ -104,7 +104,7 @@ async function handleVideoSelect(file) {
         document.getElementById('uploadForm').style.display = 'block';
         document.getElementById('uploadArea').style.display = 'none';
         
-        showNotification('Видео загружено, заполните информацию', 'success');
+        alert('Видео загружено, заполните информацию');
     };
 }
 
@@ -149,6 +149,40 @@ async function generateThumbnail(videoFile) {
             URL.revokeObjectURL(video.src);
         };
     });
+}
+
+// Функция показа уведомлений (только одна!)
+function showNotification(message, type = 'info') {
+    // Удаляем предыдущее уведомление если есть
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Создаем уведомление
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#ff4444' : '#2196f3'};
+        color: white;
+        border-radius: 8px;
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Удаляем через 3 секунды
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // Загрузка видео
@@ -198,13 +232,13 @@ async function uploadVideo() {
         // Шаг 1: Генерируем превью
         progressFill.style.width = '20%';
         progressText.textContent = '20% - Создание превью...';
-        showNotification('Создание превью...', 'info');
+        console.log('Создание превью...');
         const thumbnail = await generateThumbnail(selectedFile);
         
         // Шаг 2: Конвертируем видео
         progressFill.style.width = '40%';
         progressText.textContent = '40% - Конвертация в Base64...';
-        showNotification('Конвертация видео...', 'info');
+        console.log('Конвертация видео...');
         const videoBase64 = await convertVideoToBase64(selectedFile);
         
         // Шаг 3: Подготовка
@@ -255,41 +289,12 @@ async function uploadVideo() {
     }
 }
 
-// Функция показа уведомлений (дублер для безопасности)
-function showNotification(message, type = 'info') {
-    if (typeof window.showNotification === 'function') {
-        window.showNotification(message, type);
-    } else {
-        // Создаем уведомление, если функция не определена
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#ff4444' : '#2196f3'};
-            color: white;
-            border-radius: 8px;
-            z-index: 9999;
-            animation: slideIn 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        `;
-        
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
-    }
-}
-
 // Обработка ошибок глобально
 window.addEventListener('error', function(e) {
     console.error('Глобальная ошибка:', e.error);
-    showNotification('Произошла ошибка: ' + e.error.message, 'error');
+    if (e.error.message !== 'ResizeObserver loop limit exceeded') {
+        alert('Произошла ошибка: ' + e.error.message);
+    }
 });
 
 // Предупреждение при уходе со страницы во время загрузки
