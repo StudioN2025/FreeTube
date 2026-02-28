@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FreeTube - Бесплатное видео</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Подключаем Appwrite SDK -->
+    <!-- Подключаем Appwrite SDK с правильным URL -->
     <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1/dist/umd/sdk.js"></script>
 </head>
 <body>
@@ -25,10 +25,24 @@
         </div>
     </main>
 
+    <!-- Сначала проверяем загрузку SDK, потом загружаем видео -->
     <script src="app.js"></script>
     <script>
-        // Загружаем видео при загрузке страницы
-        document.addEventListener('DOMContentLoaded', loadVideos);
+        // Ждем загрузки DOM и проверяем SDK
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM загружен, проверяем Appwrite...');
+            
+            // Проверяем наличие Appwrite
+            if (typeof Appwrite !== 'undefined') {
+                console.log('✅ Appwrite SDK загружен');
+                // Загружаем видео
+                loadVideos();
+            } else {
+                console.error('❌ Appwrite SDK не загружен');
+                document.getElementById('video-grid').innerHTML = 
+                    '<p>❌ Ошибка загрузки SDK. Проверьте подключение к интернету.</p>';
+            }
+        });
     </script>
 </body>
 </html>
