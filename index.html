@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FreeTube - Бесплатное видео</title>
+    <!-- СНАЧАЛА подключаем Appwrite SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1/dist/umd/sdk.js"></script>
     <style>
+        /* Все стили остаются без изменений */
         * {
             margin: 0;
             padding: 0;
@@ -37,6 +40,7 @@
             margin-left: 20px;
             padding: 8px 12px;
             border-radius: 4px;
+            cursor: pointer;
         }
 
         nav a:hover {
@@ -224,10 +228,6 @@
             display: block;
         }
 
-        .nav-link {
-            cursor: pointer;
-        }
-
         .back-button {
             background-color: #383838;
             color: white;
@@ -240,6 +240,14 @@
 
         .back-button:hover {
             background-color: #4a4a4a;
+        }
+
+        .error-message {
+            color: #ff4d4d;
+            padding: 2rem;
+            text-align: center;
+            background-color: #202020;
+            border-radius: 8px;
         }
     </style>
 </head>
@@ -316,6 +324,9 @@
         let Query;
         let ID;
 
+        // Проверка загрузки SDK
+        console.log('Проверка Appwrite SDK:', typeof Appwrite);
+
         // Навигация между страницами
         function showPage(pageName) {
             document.querySelectorAll('.page').forEach(page => {
@@ -336,6 +347,8 @@
                     return false;
                 }
 
+                console.log('✅ Appwrite SDK найден, версия:', Appwrite.version);
+                
                 const { Client, Databases, ID: AppwriteID, Query: AppwriteQuery } = Appwrite;
                 
                 const client = new Client()
@@ -347,9 +360,10 @@
                 Query = AppwriteQuery;
                 
                 console.log('✅ Appwrite инициализирован');
+                console.log('Project:', APPWRITE_CONFIG.projectId);
                 return true;
             } catch (error) {
-                console.error('❌ Ошибка:', error);
+                console.error('❌ Ошибка инициализации:', error);
                 return false;
             }
         }
@@ -359,16 +373,22 @@
             const grid = document.getElementById('video-grid');
             if (!grid) return;
 
+            console.log('Загрузка видео...');
+
             if (!initAppwrite()) {
-                grid.innerHTML = '<p>❌ Ошибка подключения к базе данных</p>';
+                grid.innerHTML = '<div class="error-message">❌ Ошибка подключения к базе данных. Проверьте подключение к интернету.</div>';
                 return;
             }
 
             try {
+                console.log('Отправка запроса к Appwrite...');
+                
                 const response = await databases.listDocuments(
                     APPWRITE_CONFIG.databaseId,
                     APPWRITE_CONFIG.collectionId
                 );
+
+                console.log('Ответ получен:', response);
 
                 if (!response.documents || response.documents.length === 0) {
                     grid.innerHTML = '<p>📹 Пока нет видео. <a onclick="showPage(\'upload\')" style="color:#ff4d4d; cursor:pointer;">Загрузите первое видео!</a></p>';
@@ -383,8 +403,8 @@
                 });
 
             } catch (error) {
-                console.error('❌ Ошибка:', error);
-                grid.innerHTML = `<p>❌ Ошибка: ${error.message}</p>`;
+                console.error('❌ Ошибка загрузки:', error);
+                grid.innerHTML = `<div class="error-message">❌ Ошибка: ${error.message}</div>`;
             }
         }
 
@@ -423,19 +443,23 @@
             container.innerHTML = '<p>Загрузка видео...</p>';
 
             if (!initAppwrite()) {
-                container.innerHTML = '<p>❌ Ошибка подключения к базе данных</p>';
+                container.innerHTML = '<div class="error-message">❌ Ошибка подключения к базе данных</div>';
                 return;
             }
 
             try {
+                console.log('Загрузка видео ID:', videoId);
+                
                 const video = await databases.getDocument(
                     APPWRITE_CONFIG.databaseId,
                     APPWRITE_CONFIG.collectionId,
                     videoId
                 );
 
+                console.log('Видео загружено:', video.title);
+
                 if (!video.videoData) {
-                    container.innerHTML = '<p>❌ Видео отсутствует</p>';
+                    container.innerHTML = '<div class="error-message">❌ Видео отсутствует</div>';
                     return;
                 }
 
@@ -457,8 +481,8 @@
                 `;
 
             } catch (error) {
-                console.error('❌ Ошибка:', error);
-                container.innerHTML = `<p>❌ Ошибка: ${error.message}</p>`;
+                console.error('❌ Ошибка плеера:', error);
+                container.innerHTML = `<div class="error-message">❌ Ошибка: ${error.message}</div>`;
             }
         }
 
@@ -482,19 +506,26 @@
                     return;
                 }
 
+                // Проверка размера
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('❌ Файл слишком большой. Максимальный размер: 10MB');
+                    return;
+                }
+
                 const progressArea = document.getElementById('progress-area');
                 const progressBar = document.getElementById('progress-bar');
                 const progressText = document.getElementById('progress-text');
                 progressArea.style.display = 'block';
 
                 try {
-                    progressText.textContent = '🔄 Конвертация...';
+                    progressText.textContent = '🔄 Конвертация в Base64...';
                     
                     const base64Video = await fileToBase64(file);
 
-                    progressText.textContent = '💾 Сохранение...';
+                    progressText.textContent = '💾 Сохранение в базу данных...';
+                    progressBar.value = 70;
 
-                    await databases.createDocument(
+                    const result = await databases.createDocument(
                         APPWRITE_CONFIG.databaseId,
                         APPWRITE_CONFIG.collectionId,
                         ID.unique(),
@@ -506,12 +537,19 @@
                         }
                     );
 
-                    alert('✅ Видео опубликовано!');
-                    showPage('home');
-                    loadVideos();
+                    console.log('Видео сохранено:', result);
+
+                    progressBar.value = 100;
+                    progressText.textContent = '✅ Готово!';
+                    
+                    setTimeout(() => {
+                        alert('✅ Видео успешно опубликовано!');
+                        showPage('home');
+                        loadVideos();
+                    }, 500);
 
                 } catch (error) {
-                    console.error('❌ Ошибка:', error);
+                    console.error('❌ Ошибка загрузки:', error);
                     alert('❌ Ошибка: ' + error.message);
                     progressArea.style.display = 'none';
                 }
@@ -523,7 +561,10 @@
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
+                reader.onerror = (error) => {
+                    console.error('Ошибка чтения файла:', error);
+                    reject(error);
+                };
                 reader.readAsDataURL(file);
             });
         }
@@ -539,18 +580,24 @@
         // Форматирование даты
         function formatDate(dateString) {
             if (!dateString) return '';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ru-RU');
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU');
+            } catch (e) {
+                return dateString;
+            }
         }
 
         // Загрузка при старте
         document.addEventListener('DOMContentLoaded', function() {
             console.log('FreeTube загружен');
-            loadVideos();
+            console.log('Appwrite SDK доступен:', typeof Appwrite !== 'undefined');
+            
+            // Небольшая задержка для гарантии загрузки SDK
+            setTimeout(() => {
+                loadVideos();
+            }, 100);
         });
     </script>
-
-    <!-- Подключаем Appwrite SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1/dist/umd/sdk.js"></script>
 </body>
 </html>
