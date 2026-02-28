@@ -1,25 +1,57 @@
 // Конфигурация Appwrite
 const APPWRITE_CONFIG = {
-    endpoint: 'https://sgp.cloud.appwrite.io/v1', // Ваш endpoint
-    projectId: '69a3134e00396e25bece', // Ваш Project ID
-    databaseId: '69a3136100029295a7d3', // Ваш Database ID
-    collectionId: '69a3137f0019afffbdf2' // Ваш Collection ID
+    endpoint: 'https://sgp.cloud.appwrite.io/v1',
+    projectId: '69a3134e00396e25bece',
+    databaseId: '69a3136100029295a7d3',
+    collectionId: '69a3137f0019afffbdf2'
 };
 
-// Инициализация Appwrite
-const { Client, Databases, ID, Query } = Appwrite;
-const client = new Client()
-    .setEndpoint(APPWRITE_CONFIG.endpoint)
-    .setProject(APPWRITE_CONFIG.projectId);
+// Глобальные переменные
+let databases;
+let Query;
+let ID;
 
-const databases = new Databases(client);
+// Инициализация Appwrite после загрузки SDK
+function initAppwrite() {
+    try {
+        // Проверяем, загружен ли Appwrite
+        if (typeof Appwrite === 'undefined') {
+            console.error('Appwrite SDK не загружен!');
+            return false;
+        }
+
+        const { Client, Databases, ID: AppwriteID, Query: AppwriteQuery } = Appwrite;
+        
+        const client = new Client()
+            .setEndpoint(APPWRITE_CONFIG.endpoint)
+            .setProject(APPWRITE_CONFIG.projectId);
+        
+        databases = new Databases(client);
+        ID = AppwriteID;
+        Query = AppwriteQuery;
+        
+        console.log('✅ Appwrite инициализирован успешно');
+        return true;
+    } catch (error) {
+        console.error('❌ Ошибка инициализации Appwrite:', error);
+        return false;
+    }
+}
 
 // Функция загрузки видео (для главной страницы)
 async function loadVideos() {
     const grid = document.getElementById('video-grid');
     if (!grid) return;
 
+    // Проверяем инициализацию
+    if (!initAppwrite()) {
+        grid.innerHTML = '<p>❌ Ошибка подключения к базе данных. Проверьте консоль.</p>';
+        return;
+    }
+
     try {
+        console.log('Загружаем видео из Appwrite...');
+        
         // Запрашиваем все видео из базы, сортируем по дате (новые сверху)
         const response = await databases.listDocuments(
             APPWRITE_CONFIG.databaseId,
@@ -30,8 +62,10 @@ async function loadVideos() {
             ]
         );
 
+        console.log('Получен ответ:', response);
+
         if (response.documents.length === 0) {
-            grid.innerHTML = '<p>Пока нет видео. Будьте первым, кто загрузит!</p>';
+            grid.innerHTML = '<p>📹 Пока нет видео. Будьте первым, кто загрузит!</p>';
             return;
         }
 
@@ -45,8 +79,8 @@ async function loadVideos() {
         });
 
     } catch (error) {
-        console.error('Ошибка загрузки видео:', error);
-        grid.innerHTML = '<p>Ошибка загрузки видео. Проверьте консоль.</p>';
+        console.error('❌ Ошибка загрузки видео:', error);
+        grid.innerHTML = `<p>❌ Ошибка загрузки видео: ${error.message}. Проверьте консоль.</p>`;
     }
 }
 
@@ -62,7 +96,6 @@ function createVideoCard(video) {
     let thumbnailHtml = '<div style="color:white; padding:20px; text-align:center;">🎬 Нет превью</div>';
     
     if (video.videoData) {
-        // Создаем миниатюру с видео, но не загружаем всё видео целиком
         thumbnailHtml = `<video src="${video.videoData}" preload="metadata"></video>`;
     }
 
@@ -84,16 +117,24 @@ async function playVideo() {
     const container = document.getElementById('video-container');
     if (!container) return;
 
+    // Проверяем инициализацию
+    if (!initAppwrite()) {
+        container.innerHTML = '<p>❌ Ошибка подключения к базе данных</p>';
+        return;
+    }
+
     // Получаем ID видео из URL
     const urlParams = new URLSearchParams(window.location.search);
     const videoId = urlParams.get('id');
 
     if (!videoId) {
-        container.innerHTML = '<p>ID видео не указан</p>';
+        container.innerHTML = '<p>❌ ID видео не указан</p>';
         return;
     }
 
     try {
+        console.log('Загружаем видео с ID:', videoId);
+        
         // Получаем документ по ID
         const video = await databases.getDocument(
             APPWRITE_CONFIG.databaseId,
@@ -101,13 +142,15 @@ async function playVideo() {
             videoId
         );
 
+        console.log('Видео загружено:', video.title);
+
         if (!video.videoData) {
-            container.innerHTML = '<p>Видео повреждено или отсутствует</p>';
+            container.innerHTML = '<p>❌ Видео повреждено или отсутствует</p>';
             return;
         }
 
         // Проверяем размер данных (для отладки)
-        const sizeInMB = (video.videoData.length * 0.75) / (1024 * 1024); // Приблизительный размер в MB
+        const sizeInMB = (video.videoData.length * 0.75) / (1024 * 1024);
         console.log(`Размер видео: ~${sizeInMB.toFixed(2)} MB`);
 
         // Создаем HTML5 плеер
@@ -129,8 +172,8 @@ async function playVideo() {
         `;
 
     } catch (error) {
-        console.error('Ошибка загрузки видео:', error);
-        container.innerHTML = '<p>Ошибка загрузки видео. Проверьте консоль.</p>';
+        console.error('❌ Ошибка загрузки видео:', error);
+        container.innerHTML = `<p>❌ Ошибка загрузки видео: ${error.message}</p>`;
     }
 }
 
@@ -139,20 +182,26 @@ if (document.getElementById('upload-form')) {
     document.getElementById('upload-form').addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        // Проверяем инициализацию
+        if (!initAppwrite()) {
+            alert('❌ Ошибка подключения к базе данных');
+            return;
+        }
+
         const title = document.getElementById('title').value;
         const description = document.getElementById('description').value;
         const fileInput = document.getElementById('video-file');
         const file = fileInput.files[0];
 
         if (!file) {
-            alert('Выберите видео файл');
+            alert('❌ Выберите видео файл');
             return;
         }
 
-        // Проверяем размер файла (предупреждаем если большой)
+        // Проверяем размер файла
         const fileSizeMB = file.size / (1024 * 1024);
         if (fileSizeMB > 10) {
-            if (!confirm(`Внимание! Файл большой (${fileSizeMB.toFixed(2)} MB). 
+            if (!confirm(`⚠️ Внимание! Файл большой (${fileSizeMB.toFixed(2)} MB). 
 Base64 кодирование может занять много времени и памяти. Продолжить?`)) {
                 return;
             }
@@ -166,14 +215,14 @@ Base64 кодирование может занять много времени 
 
         try {
             // Конвертируем файл в Base64
-            progressText.textContent = 'Конвертация в Base64...';
+            progressText.textContent = '🔄 Конвертация в Base64...';
             const base64Video = await fileToBase64(file, (progress) => {
                 progressBar.value = progress;
-                progressText.textContent = `Конвертация... ${Math.round(progress)}%`;
+                progressText.textContent = `🔄 Конвертация... ${Math.round(progress)}%`;
             });
 
             // Создаем документ в Appwrite
-            progressText.textContent = 'Сохранение в базу данных...';
+            progressText.textContent = '💾 Сохранение в базу данных...';
             progressBar.value = 90;
 
             const data = {
@@ -183,15 +232,19 @@ Base64 кодирование может занять много времени 
                 createdAt: new Date().toISOString()
             };
 
-            await databases.createDocument(
+            console.log('Сохраняем видео в Appwrite...');
+            
+            const result = await databases.createDocument(
                 APPWRITE_CONFIG.databaseId,
                 APPWRITE_CONFIG.collectionId,
                 ID.unique(),
                 data
             );
 
+            console.log('✅ Видео сохранено:', result);
+
             progressBar.value = 100;
-            progressText.textContent = 'Готово!';
+            progressText.textContent = '✅ Готово!';
             
             setTimeout(() => {
                 alert('✅ Видео успешно опубликовано!');
@@ -199,7 +252,7 @@ Base64 кодирование может занять много времени 
             }, 500);
 
         } catch (error) {
-            console.error('Ошибка:', error);
+            console.error('❌ Ошибка:', error);
             alert('❌ Ошибка при загрузке видео: ' + error.message);
             progressArea.style.display = 'none';
         }
@@ -212,7 +265,7 @@ function fileToBase64(file, onProgress) {
         const reader = new FileReader();
         
         reader.onload = () => {
-            resolve(reader.result); // Это и есть Base64 строка
+            resolve(reader.result);
         };
         
         reader.onerror = (error) => {
@@ -229,7 +282,7 @@ function fileToBase64(file, onProgress) {
             });
         }
 
-        reader.readAsDataURL(file); // Запускаем чтение
+        reader.readAsDataURL(file);
     });
 }
 
@@ -318,3 +371,9 @@ style.textContent = `
 `;
 
 document.head.appendChild(style);
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📱 FreeTube загружен');
+    initAppwrite();
+});
