@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeTube - Свободное видео</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config/supabase.js"></script>
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="nav-left">
+                <a href="/" class="logo">FreeTube</a>
+            </div>
+            <div class="nav-center">
+                <input type="text" placeholder="Поиск видео..." id="searchInput">
+                <button onclick="searchVideos()">🔍</button>
+            </div>
+            <div class="nav-right">
+                <button id="uploadBtn" onclick="window.location.href='upload.html'">Загрузить</button>
+                <button id="authBtn">Войти</button>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <div class="filters">
+            <button class="filter-btn active" data-filter="all">Все</button>
+            <button class="filter-btn" data-filter="latest">Новые</button>
+            <button class="filter-btn" data-filter="popular">Популярные</button>
+        </div>
+
+        <div class="videos-grid" id="videosContainer">
+            <!-- Видео будут загружаться сюда -->
+        </div>
+    </main>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

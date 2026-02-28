@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Просмотр видео - FreeTube</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="nav-left">
+                <a href="/" class="logo">FreeTube</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="video-page">
+        <div class="video-container">
+            <video id="videoPlayer" controls></video>
+            
+            <div class="video-info">
+                <h1 id="videoTitle"></h1>
+                
+                <div class="video-stats">
+                    <span id="viewCount">0 просмотров</span>
+                    <span id="uploadDate"></span>
+                </div>
+
+                <div class="channel-info">
+                    <div class="channel-avatar"></div>
+                    <div class="channel-details">
+                        <h3 id="channelName"></h3>
+                    </div>
+                    <button class="subscribe-btn">Подписаться</button>
+                </div>
+
+                <div class="description-box">
+                    <p id="videoDescription"></p>
+                </div>
+            </div>
+
+            <div class="comments-section">
+                <h3>Комментарии</h3>
+                <textarea placeholder="Добавить комментарий..."></textarea>
+                <button>Отправить</button>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h3>Рекомендации</h3>
+            <div id="recommendedVideos"></div>
+        </div>
+    </main>
+
+    <script src="js/video.js"></script>
+</body>
+</html>
