@@ -8,7 +8,103 @@
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <!-- Конфигурация Supabase прямо здесь -->
+    <style>
+        /* Дополнительные стили для страницы загрузки */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        #logoutBtn {
+            padding: 0.5rem 1rem;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            color: #333;
+        }
+        
+        #logoutBtn:hover {
+            background-color: #ff0000;
+            color: white;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            color: white;
+            border-radius: 8px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .notification.success {
+            background-color: #4caf50;
+        }
+        
+        .notification.error {
+            background-color: #ff4444;
+        }
+        
+        .notification.info {
+            background-color: #2196f3;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    
+    <!-- Конфигурация Supabase -->
     <script>
         // Конфигурация Supabase с вашими данными
         const SUPABASE_CONFIG = {
@@ -176,6 +272,34 @@
         window.supabaseClient = supabaseClient;
         window.supabaseHelpers = supabaseHelpers;
 
+        // Функция выхода
+        window.logout = async function() {
+            await supabaseHelpers.signOut();
+            localStorage.removeItem('user');
+            showNotification('Вы вышли из системы', 'info');
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 1500);
+        };
+
+        // Функция показа уведомлений
+        window.showNotification = function(message, type = 'info') {
+            const existingNotification = document.querySelector('.notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        };
+
         // Тестируем соединение
         supabaseHelpers.testConnection();
         console.log('🚀 FreeTube Upload инициализирован');
@@ -186,6 +310,9 @@
         <nav class="navbar">
             <div class="nav-left">
                 <a href="/" class="logo">FreeTube</a>
+            </div>
+            <div class="nav-right" id="navRight">
+                <!-- Динамически заполняется через JavaScript -->
             </div>
         </nav>
     </header>
@@ -199,6 +326,8 @@
                 <div class="upload-icon">📹</div>
                 <p>Нажмите для выбора видео или перетащите файл сюда</p>
                 <small>Максимальный размер: 100 МБ</small>
+                <br>
+                <small>Поддерживаемые форматы: MP4, WebM, OGG, MOV</small>
             </div>
         </div>
 
@@ -217,9 +346,18 @@
                 <textarea id="description" rows="4" maxlength="5000" placeholder="Введите описание видео"></textarea>
             </div>
 
+            <div class="form-group">
+                <label for="quality">Качество видео</label>
+                <select id="quality">
+                    <option value="high">HD (рекомендуется)</option>
+                    <option value="medium">Среднее</option>
+                    <option value="low">Низкое</option>
+                </select>
+            </div>
+
             <button type="submit" class="submit-btn" id="uploadBtn">
                 <span class="btn-text">Опубликовать видео</span>
-                <span class="loading-spinner" style="display: none;">⏳ Загрузка...</span>
+                <span class="loading-spinner" style="display: none;"></span>
             </button>
         </form>
 
@@ -231,5 +369,36 @@
 
     <!-- Подключаем upload.js -->
     <script src="js/upload.js"></script>
+    
+    <script>
+        // Обновляем навигацию при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async function() {
+            const navRight = document.getElementById('navRight');
+            
+            try {
+                const { data: { user } } = await supabaseHelpers.getCurrentUser();
+                
+                if (user) {
+                    // Пользователь авторизован
+                    const email = user.email || 'User';
+                    const initial = email.charAt(0).toUpperCase();
+                    
+                    navRight.innerHTML = `
+                        <div class="user-info">
+                            <div class="user-avatar">${initial}</div>
+                            <span>${email}</span>
+                            <button id="logoutBtn" onclick="logout()">Выйти</button>
+                        </div>
+                    `;
+                } else {
+                    // Пользователь не авторизован - перенаправляем на login
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
 </body>
 </html>
