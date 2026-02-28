@@ -1,8 +1,11 @@
-// Теперь main.js использует конфигурацию из supabase.js
-
 // Загрузка видео
 async function loadVideos(filter = 'all') {
     try {
+        // Проверяем, что supabaseHelpers существует
+        if (typeof supabaseHelpers === 'undefined') {
+            throw new Error('supabaseHelpers не загружен. Проверьте подключение supabase.js');
+        }
+        
         const { data: videos, error } = await supabaseHelpers.getVideos(filter);
         
         if (error) throw error;
@@ -10,7 +13,11 @@ async function loadVideos(filter = 'all') {
         displayVideos(videos);
     } catch (error) {
         console.error('Ошибка загрузки видео:', error);
-        showNotification('Ошибка загрузки видео', 'error');
+        showNotification('Ошибка загрузки видео: ' + error.message, 'error');
+        
+        // Показываем заглушку
+        const container = document.getElementById('videosContainer');
+        container.innerHTML = '<div class="error-message">Не удалось загрузить видео. Проверьте подключение к Supabase.</div>';
     }
 }
 
@@ -33,7 +40,7 @@ function displayVideos(videos) {
                 <span class="duration">${formatDuration(video.duration)}</span>
             </div>
             <div class="video-info">
-                <h3 class="video-title">${video.title}</h3>
+                <h3 class="video-title">${video.title || 'Без названия'}</h3>
                 <p class="channel-name">${video.channel_name || 'FreeTube User'}</p>
                 <div class="video-stats">
                     <span>${formatViews(video.views)} просмотров</span> • 
@@ -72,17 +79,65 @@ async function searchVideos() {
 
 // Показать уведомление
 function showNotification(message, type = 'info') {
+    // Проверяем, есть ли уже уведомление
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
     // Создаем элемент уведомления
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#4caf50' : '#ff4444'};
+        color: white;
+        border-radius: 8px;
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    `;
+    
+    // Добавляем анимацию
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
     
     // Добавляем в DOM
     document.body.appendChild(notification);
     
     // Удаляем через 3 секунды
     setTimeout(() => {
-        notification.remove();
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+            notification.remove();
+            style.remove();
+        }, 300);
     }, 3000);
 }
 
@@ -102,15 +157,17 @@ function formatViews(views) {
 }
 
 function timeAgo(date) {
+    if (!date) return 'недавно';
+    
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     
     const intervals = {
         год: 31536000,
-        месяца: 2592000,
-        недели: 604800,
-        дня: 86400,
-        часа: 3600,
-        минуты: 60
+        месяц: 2592000,
+        неделя: 604800,
+        день: 86400,
+        час: 3600,
+        минута: 60
     };
     
     for (const [unit, secondsInUnit] of Object.entries(intervals)) {
@@ -119,9 +176,9 @@ function timeAgo(date) {
             // Склонение
             let unitText = unit;
             if (interval > 1 && interval < 5) {
-                unitText = unit.slice(0, -1) + 'а';
+                unitText = unit + 'а';
             } else if (interval >= 5) {
-                unitText = unit.slice(0, -1) + 'ев';
+                unitText = unit + 'ев';
             }
             return `${interval} ${unitText} назад`;
         }
@@ -130,8 +187,38 @@ function timeAgo(date) {
     return 'только что';
 }
 
+// Проверка авторизации
+async function checkAuth() {
+    try {
+        const { data: { user } } = await supabaseHelpers.getCurrentUser();
+        const authBtn = document.getElementById('authBtn');
+        
+        if (user) {
+            authBtn.textContent = 'Выйти';
+            authBtn.onclick = async () => {
+                await supabaseHelpers.signOut();
+                window.location.reload();
+            };
+        } else {
+            authBtn.textContent = 'Войти';
+            authBtn.onclick = () => {
+                window.location.href = 'login.html';
+            };
+        }
+    } catch (error) {
+        console.error('Ошибка проверки авторизации:', error);
+    }
+}
+
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
+    // Проверяем загрузку supabaseHelpers
+    if (typeof supabaseHelpers === 'undefined') {
+        console.error('supabaseHelpers не загружен!');
+        showNotification('Ошибка загрузки конфигурации', 'error');
+        return;
+    }
+    
     loadVideos();
     
     // Обработчики фильтров
@@ -144,29 +231,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Поиск по Enter
-    document.getElementById('searchInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchVideos();
-    });
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchVideos();
+        });
+    }
     
     // Проверка авторизации
     checkAuth();
 });
-
-// Проверка авторизации
-async function checkAuth() {
-    const { data: { user } } = await supabaseHelpers.getCurrentUser();
-    const authBtn = document.getElementById('authBtn');
-    
-    if (user) {
-        authBtn.textContent = 'Выйти';
-        authBtn.onclick = async () => {
-            await supabaseHelpers.signOut();
-            window.location.reload();
-        };
-    } else {
-        authBtn.textContent = 'Войти';
-        authBtn.onclick = () => {
-            window.location.href = 'login.html';
-        };
-    }
-}
