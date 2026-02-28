@@ -1,345 +1,577 @@
-// js/upload.js
-
-// Глобальные переменные
-let selectedFile = null;
-let videoDuration = 0;
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Страница загрузки инициализирована');
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Загрузить видео - FreeTube</title>
+    <!-- Подключаем CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    // Проверяем наличие supabaseHelpers
-    if (typeof supabaseHelpers === 'undefined') {
-        console.error('❌ supabaseHelpers не загружен!');
-        alert('Ошибка загрузки конфигурации Supabase');
-        return;
-    }
-    
-    // Инициализируем обработчики событий
-    initializeEventListeners();
-});
+    <style>
+        /* Дополнительные стили только для страницы загрузки */
+        .upload-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
 
-// Инициализация обработчиков событий
-function initializeEventListeners() {
-    const uploadArea = document.getElementById('uploadArea');
-    const videoInput = document.getElementById('videoInput');
-    const uploadForm = document.getElementById('uploadForm');
-    const qualitySelect = document.getElementById('quality');
-    
-    if (uploadArea) {
-        uploadArea.addEventListener('click', () => {
-            videoInput.click();
-        });
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+            background: white;
+        }
 
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.target.style.borderColor = '#ff0000';
-        });
+        .upload-area:hover {
+            border-color: #ff0000;
+        }
 
-        uploadArea.addEventListener('dragleave', (e) => {
-            e.target.style.borderColor = '#ccc';
-        });
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
 
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.target.style.borderColor = '#ccc';
-            
-            const file = e.dataTransfer.files[0];
-            if (file && file.type.startsWith('video/')) {
-                handleVideoSelect(file);
-            } else {
-                alert('Пожалуйста, выберите видео файл');
+        .video-preview video {
+            width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #ff0000;
+            box-shadow: 0 0 0 2px rgba(255,0,0,0.1);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .submit-btn:hover {
+            background-color: #cc0000;
+        }
+
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress-bar {
+            margin-top: 1rem;
+            height: 30px;
+            background-color: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #ff0000;
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-weight: 600;
+            text-shadow: 0 0 5px white;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #333;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        #logoutBtn {
+            padding: 0.5rem 1rem;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            color: #333;
+            transition: all 0.3s;
+        }
+
+        #logoutBtn:hover {
+            background-color: #ff0000;
+            color: white;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            color: white;
+            border-radius: 8px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .notification.success {
+            background-color: #4caf50;
+        }
+
+        .notification.error {
+            background-color: #ff4444;
+        }
+
+        .notification.info {
+            background-color: #2196f3;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
             }
-        });
-    }
-
-    if (videoInput) {
-        videoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                handleVideoSelect(file);
+            to {
+                transform: translateX(0);
+                opacity: 1;
             }
-        });
-    }
+        }
 
-    if (uploadForm) {
-        uploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await uploadVideo();
-        });
-    }
-
-    if (qualitySelect) {
-        qualitySelect.addEventListener('change', function(e) {
-            console.log('Выбрано качество:', e.target.value);
-        });
-    }
-}
-
-// Обработка выбранного видео
-async function handleVideoSelect(file) {
-    console.log('Выбран файл:', file.name, 'Размер:', (file.size / 1024 / 1024).toFixed(2), 'MB');
-    
-    // Проверка размера (макс 50 МБ для Base64)
-    if (file.size > 50 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер: 50 МБ');
-        return;
-    }
-    
-    // Проверка формата
-    const validTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
-    if (!validTypes.includes(file.type)) {
-        alert('Неподдерживаемый формат видео. Используйте MP4, WebM, OGG или MOV');
-        return;
-    }
-    
-    selectedFile = file;
-    
-    // Показываем предупреждение о размере в Base64
-    const estimatedSize = (file.size / 1024 / 1024 * 1.37).toFixed(2);
-    document.getElementById('previewSizeWarning').textContent = 
-        `⚠️ В Base64 размер будет примерно ${estimatedSize} МБ`;
-    
-    // Показываем превью
-    const videoPreview = document.getElementById('videoPreview');
-    const videoElement = videoPreview.querySelector('video');
-    videoElement.src = URL.createObjectURL(file);
-    videoPreview.style.display = 'block';
-    
-    // Получаем длительность видео
-    videoElement.onloadedmetadata = () => {
-        videoDuration = Math.floor(videoElement.duration);
-        const minutes = Math.floor(videoDuration / 60);
-        const seconds = videoDuration % 60;
-        console.log(`Длительность видео: ${minutes}:${seconds.toString().padStart(2, '0')}`);
-        
-        document.getElementById('uploadForm').style.display = 'block';
-        document.getElementById('uploadArea').style.display = 'none';
-        
-        alert('Видео загружено, заполните информацию');
-    };
-}
-
-// Конвертация видео в Base64
-async function convertVideoToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        
-        reader.onload = async (e) => {
-            try {
-                // Получаем Base64 без префикса
-                const base64 = e.target.result.split(',')[1];
-                resolve(base64);
-            } catch (error) {
-                reject(error);
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
             }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .format-info {
+            margin-top: 10px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .format-info i {
+            color: #ff0000;
+        }
+
+        .file-size-warning {
+            color: #ff4444;
+            font-size: 12px;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+
+        .quality-info {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border-left: 4px solid #ff0000;
+        }
+
+        .quality-info strong {
+            color: #ff0000;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #ff0000;
+            text-decoration: none;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        small {
+            color: #666;
+            display: block;
+            margin-top: 5px;
+        }
+    </style>
+    
+    <!-- Конфигурация Supabase -->
+    <script>
+        // Конфигурация Supabase с вашими данными
+        const SUPABASE_CONFIG = {
+            url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
         };
-        
-        reader.onerror = (error) => reject(error);
-        reader.readAsDataURL(file);
-    });
-}
 
-// Создание превью с оптимизацией
-async function generateThumbnail(videoFile) {
-    return new Promise((resolve, reject) => {
-        try {
-            const video = document.createElement('video');
-            video.src = URL.createObjectURL(videoFile);
-            video.currentTime = 1; // Берем кадр на 1 секунде
-            
-            video.onloadeddata = () => {
+        // Проверяем, загружен ли Supabase SDK
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase SDK не загружен!');
+            throw new Error('Supabase SDK не загружен');
+        }
+
+        // Инициализация Supabase клиента
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+        // Вспомогательные функции
+        const supabaseHelpers = {
+            // Получение всех видео
+            async getVideos(filter = 'all', limit = 50) {
                 try {
-                    const canvas = document.createElement('canvas');
-                    // Уменьшаем размер превью для экономии места
-                    const maxWidth = 640;
-                    const scale = Math.min(maxWidth / video.videoWidth, 1);
-                    canvas.width = video.videoWidth * scale;
-                    canvas.height = video.videoHeight * scale;
+                    let query = supabaseClient
+                        .from('videos')
+                        .select('*');
                     
-                    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                    switch(filter) {
+                        case 'latest':
+                            query = query.order('created_at', { ascending: false });
+                            break;
+                        case 'popular':
+                            query = query.order('views', { ascending: false });
+                            break;
+                        default:
+                            query = query.order('created_at', { ascending: false });
+                    }
                     
-                    // Конвертируем в Base64 (сжимаем до 70% качества)
-                    const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+                    const { data, error } = await query.limit(limit);
                     
-                    // Очищаем
-                    URL.revokeObjectURL(video.src);
-                    
-                    resolve(thumbnail);
-                } catch (err) {
-                    reject(err);
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения видео:', error);
+                    return { data: null, error };
                 }
-            };
-            
-            video.onerror = () => {
-                reject(new Error('Ошибка загрузки видео для превью'));
-            };
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
+            },
 
-// Функция показа уведомлений
-function showNotification(message, type = 'info') {
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-    
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
+            // Получение видео по ID
+            async getVideoById(videoId) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .eq('id', videoId)
+                        .single();
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения видео:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Добавление видео через RPC функцию с увеличенным таймаутом
+            async insertVideo(videoData) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .rpc('insert_video', {
+                            p_title: videoData.title,
+                            p_description: videoData.description,
+                            p_video_data: videoData.video_data,
+                            p_thumbnail: videoData.thumbnail,
+                            p_duration: videoData.duration,
+                            p_channel_name: videoData.channel_name,
+                            p_user_id: videoData.user_id
+                        });
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка вставки видео:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Увеличение просмотров
+            async incrementViews(videoId) {
+                try {
+                    const { error } = await supabaseClient.rpc('increment_views', { 
+                        video_id: videoId 
+                    });
+                    
+                    if (error) throw error;
+                    return { success: true, error: null };
+                } catch (error) {
+                    console.error('Ошибка обновления просмотров:', error);
+                    return { success: false, error };
+                }
+            },
+
+            // Поиск видео
+            async searchVideos(searchTerm) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .ilike('title', `%${searchTerm}%`)
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка поиска:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Рекомендации
+            async getRecommendedVideos(currentVideoId, limit = 10) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .neq('id', currentVideoId)
+                        .order('views', { ascending: false })
+                        .limit(limit);
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения рекомендаций:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Получение текущего пользователя
+            getCurrentUser() {
+                return supabaseClient.auth.getUser();
+            },
+
+            // Выход
+            async signOut() {
+                try {
+                    const { error } = await supabaseClient.auth.signOut();
+                    if (error) throw error;
+                    return { success: true, error: null };
+                } catch (error) {
+                    console.error('Ошибка выхода:', error);
+                    return { success: false, error };
+                }
+            },
+
+            // Проверка соединения
+            async testConnection() {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('count', { count: 'exact', head: true });
+                    
+                    if (error) throw error;
+                    console.log('✅ Соединение с Supabase установлено');
+                    return true;
+                } catch (error) {
+                    console.error('❌ Ошибка соединения с Supabase:', error.message);
+                    return false;
+                }
             }
-        }, 300);
-    }, 3000);
-}
-
-// Функция сжатия видео (упрощенная)
-async function compressVideo(file, quality) {
-    // В реальном проекте здесь можно использовать FFmpeg.js
-    // Пока просто возвращаем файл без сжатия
-    console.log('Сжатие видео до качества:', quality);
-    return file;
-}
-
-// Загрузка видео
-async function uploadVideo() {
-    const title = document.getElementById('title').value.trim();
-    const description = document.getElementById('description').value.trim();
-    const quality = document.getElementById('quality').value;
-    
-    if (!title) {
-        showNotification('Введите название видео', 'error');
-        return;
-    }
-    
-    if (!selectedFile) {
-        showNotification('Выберите видео файл', 'error');
-        return;
-    }
-    
-    // Проверяем наличие supabaseHelpers
-    if (typeof supabaseHelpers === 'undefined') {
-        showNotification('Ошибка конфигурации. Пожалуйста, обновите страницу.', 'error');
-        return;
-    }
-    
-    // Проверка авторизации
-    const { data: { user } } = await supabaseHelpers.getCurrentUser();
-    if (!user) {
-        showNotification('Необходимо войти в систему для загрузки видео', 'error');
-        setTimeout(() => {
-            window.location.href = 'login.html';
-        }, 2000);
-        return;
-    }
-    
-    // Показываем прогресс
-    const progressBar = document.querySelector('.progress-bar');
-    const progressFill = document.querySelector('.progress-fill');
-    const progressText = document.querySelector('.progress-text');
-    const uploadBtn = document.getElementById('uploadBtn');
-    
-    progressBar.style.display = 'block';
-    uploadBtn.disabled = true;
-    uploadBtn.querySelector('.btn-text').style.display = 'none';
-    uploadBtn.querySelector('.loading-spinner').style.display = 'inline-block';
-    
-    try {
-        // Шаг 1: Сжимаем видео если нужно
-        if (quality !== 'high') {
-            progressFill.style.width = '5%';
-            progressText.textContent = '5% - Сжатие видео...';
-            console.log('Сжатие видео...');
-            selectedFile = await compressVideo(selectedFile, quality);
-        }
-        
-        // Шаг 2: Генерируем превью
-        progressFill.style.width = '15%';
-        progressText.textContent = '15% - Создание превью...';
-        console.log('Создание превью...');
-        const thumbnail = await generateThumbnail(selectedFile);
-        
-        // Шаг 3: Конвертируем видео
-        progressFill.style.width = '30%';
-        progressText.textContent = '30% - Конвертация видео...';
-        console.log('Конвертация видео...');
-        const videoBase64 = await convertVideoToBase64(selectedFile);
-        
-        // Шаг 4: Подготовка данных
-        progressFill.style.width = '60%';
-        progressText.textContent = '60% - Подготовка данных...';
-        
-        // Небольшая задержка для анимации
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        progressFill.style.width = '80%';
-        progressText.textContent = '80% - Сохранение в базу данных...';
-        
-        // Шаг 5: Сохраняем в Supabase
-        const videoData = {
-            title: title,
-            description: description || 'Нет описания',
-            video_data: videoBase64,
-            thumbnail: thumbnail,
-            duration: videoDuration,
-            views: 0,
-            channel_name: user.email ? user.email.split('@')[0] : 'FreeTube User',
-            user_id: user.id
         };
-        
-        console.log('Отправка данных в Supabase...');
-        console.log('Размер видео в Base64:', Math.floor(videoBase64.length / 1024 / 1024), 'МБ');
-        
-        // Используем функцию с увеличенным таймаутом
-        const { data, error } = await supabaseHelpers.insertVideo(videoData);
-        
-        if (error) throw error;
-        
-        progressFill.style.width = '100%';
-        progressText.textContent = '100% - Готово!';
-        
-        showNotification('✅ Видео успешно загружено!', 'success');
-        
-        // Перенаправляем на главную через 2 секунды
-        setTimeout(() => {
-            window.location.href = 'index.html';
-        }, 2000);
-        
-    } catch (error) {
-        console.error('Ошибка загрузки:', error);
-        showNotification('❌ Ошибка при загрузке видео: ' + error.message, 'error');
-        
-        // Сбрасываем прогресс
-        progressBar.style.display = 'none';
-        uploadBtn.disabled = false;
-        uploadBtn.querySelector('.btn-text').style.display = 'inline';
-        uploadBtn.querySelector('.loading-spinner').style.display = 'none';
-    }
-}
 
-// Обработка ошибок глобально
-window.addEventListener('error', function(e) {
-    console.error('Глобальная ошибка:', e.error);
-    if (e.error && e.error.message && !e.error.message.includes('ResizeObserver')) {
-        // Не показываем алерт для каждой ошибки
-        console.log('Ошибка (игнорируем):', e.error.message);
-    }
-});
+        // Делаем функции доступными глобально
+        window.supabaseClient = supabaseClient;
+        window.supabaseHelpers = supabaseHelpers;
 
-// Предупреждение при уходе со страницы во время загрузки
-window.addEventListener('beforeunload', function(e) {
-    const progressBar = document.querySelector('.progress-bar');
-    if (progressBar && progressBar.style.display === 'block') {
-        e.preventDefault();
-        e.returnValue = 'Видео загружается. Вы уверены, что хотите покинуть страницу?';
-    }
-});
+        // Функция выхода
+        window.logout = async function() {
+            try {
+                await supabaseHelpers.signOut();
+                localStorage.removeItem('user');
+                alert('Вы вышли из системы');
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Ошибка при выходе:', error);
+            }
+        };
+
+        // Тестируем соединение
+        supabaseHelpers.testConnection();
+        console.log('🚀 FreeTube Upload инициализирован');
+    </script>
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="nav-left">
+                <a href="/" class="logo">FreeTube</a>
+            </div>
+            <div class="nav-right" id="navRight">
+                <!-- Динамически заполняется через JavaScript -->
+            </div>
+        </nav>
+    </header>
+
+    <main class="upload-container">
+        <h1>Загрузить видео</h1>
+        
+        <div class="quality-info">
+            <strong>⚠️ Важно:</strong> Максимальный размер видео: <strong>50 МБ</strong> (из-за ограничений Base64)
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <input type="file" id="videoInput" accept="video/*" hidden>
+            <div class="upload-content">
+                <div class="upload-icon">📹</div>
+                <p>Нажмите для выбора видео или перетащите файл сюда</p>
+                <small>Максимальный размер: 50 МБ</small>
+                <div class="format-info">
+                    <i>Поддерживаемые форматы: MP4, WebM, OGG, MOV</i>
+                </div>
+                <div class="file-size-warning" id="fileSizeWarning"></div>
+            </div>
+        </div>
+
+        <div class="video-preview" id="videoPreview" style="display: none;">
+            <video controls></video>
+            <div class="file-size-warning" id="previewSizeWarning"></div>
+        </div>
+
+        <form id="uploadForm" style="display: none;">
+            <div class="form-group">
+                <label for="title">Название видео</label>
+                <input type="text" id="title" required maxlength="100" placeholder="Введите название видео">
+            </div>
+
+            <div class="form-group">
+                <label for="description">Описание</label>
+                <textarea id="description" rows="4" maxlength="5000" placeholder="Введите описание видео"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="quality">Качество видео</label>
+                <select id="quality">
+                    <option value="high">HD (рекомендуется)</option>
+                    <option value="medium">Среднее</option>
+                    <option value="low">Низкое</option>
+                </select>
+            </div>
+
+            <button type="submit" class="submit-btn" id="uploadBtn">
+                <span class="btn-text">Опубликовать видео</span>
+                <span class="loading-spinner" style="display: none;"></span>
+            </button>
+        </form>
+
+        <div class="progress-bar" style="display: none;">
+            <div class="progress-fill"></div>
+            <span class="progress-text">0%</span>
+        </div>
+    </main>
+
+    <!-- Подключаем upload.js -->
+    <script src="js/upload.js"></script>
+    
+    <script>
+        // Обновляем навигацию при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async function() {
+            const navRight = document.getElementById('navRight');
+            
+            try {
+                const { data: { user } } = await supabaseHelpers.getCurrentUser();
+                
+                if (user) {
+                    // Пользователь авторизован
+                    const email = user.email || 'User';
+                    const initial = email.charAt(0).toUpperCase();
+                    
+                    navRight.innerHTML = `
+                        <div class="user-info">
+                            <div class="user-avatar">${initial}</div>
+                            <span>${email}</span>
+                            <button id="logoutBtn" onclick="logout()">Выйти</button>
+                        </div>
+                    `;
+                } else {
+                    // Пользователь не авторизован - перенаправляем на login
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+</body>
+</html>
