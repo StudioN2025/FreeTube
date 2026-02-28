@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход - FreeTube</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        .auth-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .auth-tab {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .auth-tab.active {
+            border-bottom-color: #ff0000;
+            color: #ff0000;
+            font-weight: 600;
+        }
+        
+        .auth-form {
+            display: none;
+        }
+        
+        .auth-form.active {
+            display: block;
+        }
+        
+        .auth-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .auth-button {
+            width: 100%;
+            padding: 12px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .auth-button:hover {
+            background-color: #cc0000;
+        }
+        
+        .auth-button.secondary {
+            background-color: #4caf50;
+        }
+        
+        .auth-button.secondary:hover {
+            background-color: #45a049;
+        }
+        
+        .error-message {
+            color: #ff4444;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .success-message {
+            color: #4caf50;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="nav-left">
+                <a href="/" class="logo">FreeTube</a>
+            </div>
+        </nav>
+    </header>
+    
+    <main>
+        <div class="auth-container">
+            <h1 style="text-align: center; margin-bottom: 20px;">Добро пожаловать в FreeTube</h1>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchTab('login')">Вход</button>
+                <button class="auth-tab" onclick="switchTab('register')">Регистрация</button>
+            </div>
+            
+            <!-- Форма входа -->
+            <div id="loginForm" class="auth-form active">
+                <div id="loginError" class="error-message"></div>
+                <div id="loginSuccess" class="success-message"></div>
+                
+                <input type="email" id="loginEmail" class="auth-input" placeholder="Email" required>
+                <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль" required>
+                
+                <button class="auth-button" onclick="login()">Войти</button>
+                <p style="text-align: center; color: #666; font-size: 14px;">
+                    Нет аккаунта? <a href="#" onclick="switchTab('register')">Зарегистрируйтесь</a>
+                </p>
+            </div>
+            
+            <!-- Форма регистрации -->
+            <div id="registerForm" class="auth-form">
+                <div id="registerError" class="error-message"></div>
+                <div id="registerSuccess" class="success-message"></div>
+                
+                <input type="text" id="registerName" class="auth-input" placeholder="Имя канала" required>
+                <input type="email" id="registerEmail" class="auth-input" placeholder="Email" required>
+                <input type="password" id="registerPassword" class="auth-input" placeholder="Пароль" required>
+                <input type="password" id="registerConfirmPassword" class="auth-input" placeholder="Подтвердите пароль" required>
+                
+                <button class="auth-button secondary" onclick="register()">Зарегистрироваться</button>
+                <p style="text-align: center; color: #666; font-size: 14px;">
+                    Уже есть аккаунт? <a href="#" onclick="switchTab('login')">Войдите</a>
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Конфигурация Supabase
+        const SUPABASE_CONFIG = {
+            url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
+        };
+
+        // Инициализация Supabase
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+        // Переключение между вкладками
+        function switchTab(tab) {
+            const tabs = document.querySelectorAll('.auth-tab');
+            const forms = document.querySelectorAll('.auth-form');
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            forms.forEach(f => f.classList.remove('active'));
+            
+            if (tab === 'login') {
+                tabs[0].classList.add('active');
+                document.getElementById('loginForm').classList.add('active');
+            } else {
+                tabs[1].classList.add('active');
+                document.getElementById('registerForm').classList.add('active');
+            }
+            
+            // Очищаем сообщения
+            document.getElementById('loginError').textContent = '';
+            document.getElementById('loginSuccess').textContent = '';
+            document.getElementById('registerError').textContent = '';
+            document.getElementById('registerSuccess').textContent = '';
+        }
+
+        // Функция входа
+        async function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            const successDiv = document.getElementById('loginSuccess');
+            
+            // Очищаем предыдущие сообщения
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+            
+            // Валидация
+            if (!email || !password) {
+                errorDiv.textContent = 'Заполните все поля';
+                return;
+            }
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (error) throw error;
+                
+                successDiv.textContent = 'Успешный вход! Перенаправление...';
+                
+                // Сохраняем информацию о пользователе
+                localStorage.setItem('user', JSON.stringify(data.user));
+                
+                setTimeout(() => {
+                    window.location.href = 'upload.html';
+                }, 1500);
+                
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка входа: ' + error.message;
+            }
+        }
+
+        // Функция регистрации
+        async function register() {
+            const name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('registerConfirmPassword').value;
+            const errorDiv = document.getElementById('registerError');
+            const successDiv = document.getElementById('registerSuccess');
+            
+            // Очищаем предыдущие сообщения
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+            
+            // Валидация
+            if (!name || !email || !password || !confirmPassword) {
+                errorDiv.textContent = 'Заполните все поля';
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Пароли не совпадают';
+                return;
+            }
+            
+            if (password.length < 6) {
+                errorDiv.textContent = 'Пароль должен быть не менее 6 символов';
+                return;
+            }
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            channel_name: name
+                        }
+                    }
+                });
+                
+                if (error) throw error;
+                
+                successDiv.textContent = 'Регистрация успешна! Выполняется вход...';
+                
+                // Сразу выполняем вход после регистрации
+                const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (loginError) throw loginError;
+                
+                // Сохраняем информацию о пользователе
+                localStorage.setItem('user', JSON.stringify(loginData.user));
+                
+                setTimeout(() => {
+                    window.location.href = 'upload.html';
+                }, 1500);
+                
+            } catch (error) {
+                errorDiv.textContent = 'Ошибка регистрации: ' + error.message;
+            }
+        }
+
+        // Проверяем, есть ли уже активная сессия
+        async function checkSession() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            if (session) {
+                // Если пользователь уже вошел, перенаправляем на upload.html
+                window.location.href = 'upload.html';
+            }
+        }
+
+        // Вызываем проверку при загрузке страницы
+        checkSession();
+    </script>
+</body>
+</html>
