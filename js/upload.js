@@ -1,6 +1,10 @@
 // js/upload.js
 
-// Проверяем загрузку supabaseHelpers при загрузке страницы
+// Глобальные переменные
+let selectedFile = null;
+let videoDuration = 0;
+
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Страница загрузки инициализирована');
     
@@ -11,12 +15,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    console.log('✅ supabaseHelpers загружен');
-    initializeUpload();
+    // Инициализируем обработчики событий
+    initializeEventListeners();
 });
 
-// Инициализация функций загрузки
-function initializeUpload() {
+// Инициализация обработчиков событий
+function initializeEventListeners() {
     const uploadArea = document.getElementById('uploadArea');
     const videoInput = document.getElementById('videoInput');
     const uploadForm = document.getElementById('uploadForm');
@@ -42,6 +46,8 @@ function initializeUpload() {
             const file = e.dataTransfer.files[0];
             if (file && file.type.startsWith('video/')) {
                 handleVideoSelect(file);
+            } else {
+                showNotification('Пожалуйста, выберите видео файл', 'error');
             }
         });
     }
@@ -63,23 +69,20 @@ function initializeUpload() {
     }
 }
 
-let selectedFile = null;
-let videoDuration = 0;
-
 // Обработка выбранного видео
 async function handleVideoSelect(file) {
-    console.log('Выбран файл:', file.name);
+    console.log('Выбран файл:', file.name, 'Размер:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
     // Проверка размера (макс 100 МБ)
     if (file.size > 100 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер: 100 МБ');
+        showNotification('Файл слишком большой. Максимальный размер: 100 МБ', 'error');
         return;
     }
     
     // Проверка формата
     const validTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
     if (!validTypes.includes(file.type)) {
-        alert('Неподдерживаемый формат видео. Используйте MP4, WebM, OGG или MOV');
+        showNotification('Неподдерживаемый формат видео. Используйте MP4, WebM, OGG или MOV', 'error');
         return;
     }
     
@@ -94,8 +97,14 @@ async function handleVideoSelect(file) {
     // Получаем длительность видео
     videoElement.onloadedmetadata = () => {
         videoDuration = Math.floor(videoElement.duration);
+        const minutes = Math.floor(videoDuration / 60);
+        const seconds = videoDuration % 60;
+        console.log(`Длительность видео: ${minutes}:${seconds.toString().padStart(2, '0')}`);
+        
         document.getElementById('uploadForm').style.display = 'block';
         document.getElementById('uploadArea').style.display = 'none';
+        
+        showNotification('Видео загружено, заполните информацию', 'success');
     };
 }
 
@@ -144,25 +153,33 @@ async function generateThumbnail(videoFile) {
 
 // Загрузка видео
 async function uploadVideo() {
-    const title = document.getElementById('title').value;
-    const description = document.getElementById('description').value;
+    const title = document.getElementById('title').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const quality = document.getElementById('quality').value;
     
-    if (!title || !selectedFile) {
-        alert('Заполните все поля');
+    if (!title) {
+        showNotification('Введите название видео', 'error');
+        return;
+    }
+    
+    if (!selectedFile) {
+        showNotification('Выберите видео файл', 'error');
         return;
     }
     
     // Проверяем наличие supabaseHelpers
     if (typeof supabaseHelpers === 'undefined') {
-        alert('Ошибка конфигурации. Пожалуйста, обновите страницу.');
+        showNotification('Ошибка конфигурации. Пожалуйста, обновите страницу.', 'error');
         return;
     }
     
     // Проверка авторизации
     const { data: { user } } = await supabaseHelpers.getCurrentUser();
     if (!user) {
-        alert('Необходимо войти в систему для загрузки видео');
-        window.location.href = 'login.html';
+        showNotification('Необходимо войти в систему для загрузки видео', 'error');
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 2000);
         return;
     }
     
@@ -175,37 +192,39 @@ async function uploadVideo() {
     progressBar.style.display = 'block';
     uploadBtn.disabled = true;
     uploadBtn.querySelector('.btn-text').style.display = 'none';
-    uploadBtn.querySelector('.loading-spinner').style.display = 'inline';
+    uploadBtn.querySelector('.loading-spinner').style.display = 'inline-block';
     
     try {
         // Шаг 1: Генерируем превью
         progressFill.style.width = '20%';
         progressText.textContent = '20% - Создание превью...';
+        showNotification('Создание превью...', 'info');
         const thumbnail = await generateThumbnail(selectedFile);
         
         // Шаг 2: Конвертируем видео
         progressFill.style.width = '40%';
         progressText.textContent = '40% - Конвертация в Base64...';
+        showNotification('Конвертация видео...', 'info');
         const videoBase64 = await convertVideoToBase64(selectedFile);
         
-        // Анимируем прогресс
+        // Шаг 3: Подготовка
         progressFill.style.width = '60%';
         progressText.textContent = '60% - Подготовка...';
         
         await new Promise(resolve => setTimeout(resolve, 500));
         
         progressFill.style.width = '80%';
-        progressText.textContent = '80% - Сохранение...';
+        progressText.textContent = '80% - Сохранение в базу данных...';
         
-        // Шаг 3: Сохраняем в Supabase
+        // Шаг 4: Сохраняем в Supabase
         const videoData = {
             title: title,
-            description: description,
+            description: description || 'Нет описания',
             video_data: videoBase64,
             thumbnail: thumbnail,
             duration: videoDuration,
             views: 0,
-            channel_name: user.email || 'FreeTube User',
+            channel_name: user.email ? user.email.split('@')[0] : 'FreeTube User',
             user_id: user.id
         };
         
@@ -217,16 +236,18 @@ async function uploadVideo() {
         progressFill.style.width = '100%';
         progressText.textContent = '100% - Готово!';
         
-        showNotification('Видео успешно загружено!', 'success');
+        showNotification('✅ Видео успешно загружено!', 'success');
         
+        // Перенаправляем на страницу видео через 2 секунды
         setTimeout(() => {
-            window.location.href = `/video.html?id=${data[0].id}`;
-        }, 1500);
+            window.location.href = `video.html?id=${data[0].id}`;
+        }, 2000);
         
     } catch (error) {
         console.error('Ошибка загрузки:', error);
-        showNotification('Ошибка при загрузке видео: ' + error.message, 'error');
+        showNotification('❌ Ошибка при загрузке видео: ' + error.message, 'error');
         
+        // Сбрасываем прогресс
         progressBar.style.display = 'none';
         uploadBtn.disabled = false;
         uploadBtn.querySelector('.btn-text').style.display = 'inline';
@@ -234,36 +255,48 @@ async function uploadVideo() {
     }
 }
 
-// Показать уведомление
+// Функция показа уведомлений (дублер для безопасности)
 function showNotification(message, type = 'info') {
-    // Удаляем предыдущее уведомление если есть
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+    } else {
+        // Создаем уведомление, если функция не определена
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#ff4444' : '#2196f3'};
+            color: white;
+            border-radius: 8px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
     }
-    
-    // Создаем уведомление
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 20px;
-        background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#ff4444' : '#2196f3'};
-        color: white;
-        border-radius: 8px;
-        z-index: 9999;
-        animation: slideIn 0.3s ease;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Удаляем через 3 секунды
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
 }
+
+// Обработка ошибок глобально
+window.addEventListener('error', function(e) {
+    console.error('Глобальная ошибка:', e.error);
+    showNotification('Произошла ошибка: ' + e.error.message, 'error');
+});
+
+// Предупреждение при уходе со страницы во время загрузки
+window.addEventListener('beforeunload', function(e) {
+    const progressBar = document.querySelector('.progress-bar');
+    if (progressBar && progressBar.style.display === 'block') {
+        e.preventDefault();
+        e.returnValue = 'Видео загружается. Вы уверены, что хотите покинуть страницу?';
+    }
+});
