@@ -329,6 +329,87 @@ body {
     border-color: #ff0000;
 }
 
+/* Состояния загрузки и ошибок */
+.loading {
+    text-align: center;
+    padding: 50px;
+    font-size: 18px;
+    color: #666;
+    grid-column: 1 / -1;
+}
+
+.error-message {
+    text-align: center;
+    padding: 50px;
+    color: #ff4444;
+    grid-column: 1 / -1;
+}
+
+.error-message button {
+    padding: 10px 20px;
+    background: #ff0000;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+.no-videos {
+    text-align: center;
+    padding: 50px;
+    color: #666;
+    grid-column: 1 / -1;
+    font-size: 18px;
+}
+
+/* Уведомления */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    color: white;
+    border-radius: 8px;
+    z-index: 9999;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.notification.success {
+    background-color: #4caf50;
+}
+
+.notification.error {
+    background-color: #ff4444;
+}
+
+.notification.info {
+    background-color: #2196f3;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* Медиа-запросы для мобильных устройств */
 @media (max-width: 768px) {
     .video-page {
         grid-template-columns: 1fr;
@@ -342,4 +423,95 @@ body {
     .nav-center {
         width: 100%;
     }
+    
+    .nav-right {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+    
+    .videos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        padding: 1rem;
+        gap: 1rem;
+    }
+    
+    .filters {
+        padding: 1rem;
+    }
+    
+    .upload-container {
+        padding: 1rem;
+    }
+    
+    .upload-area {
+        padding: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .videos-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .video-card {
+        max-width: 100%;
+    }
+    
+    .nav-center {
+        flex-direction: column;
+    }
+    
+    .nav-center button {
+        width: 100%;
+    }
+    
+    .recommended-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .recommended-thumbnail {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 16/9;
+    }
+}
+
+/* Анимации */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Стили для скроллбара */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
