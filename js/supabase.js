@@ -1,18 +1,37 @@
-// Конфигурация Supabase
+// config/supabase.js
+
+// Конфигурация Supabase с вашими данными
 const SUPABASE_CONFIG = {
-    url: 'https://zsjxcrjopoxoaavmnoef.supabase.co', // Замените на ваш URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc' // Замените на ваш anon key
+    url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
 };
 
-// Проверяем, что Supabase загружен
+// Проверяем, загружен ли Supabase SDK
 if (typeof supabase === 'undefined') {
-    console.error('Supabase SDK не загружен! Проверьте подключение CDN');
+    console.error('❌ Supabase SDK не загружен!');
+    throw new Error('Supabase SDK не загружен. Проверьте подключение скрипта.');
 }
 
 // Инициализация Supabase клиента
 const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
 
-// Вспомогательные функции для работы с Supabase
+// Проверка соединения
+async function testConnection() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('videos')
+            .select('count', { count: 'exact', head: true });
+        
+        if (error) throw error;
+        console.log('✅ Соединение с Supabase установлено');
+        return true;
+    } catch (error) {
+        console.error('❌ Ошибка соединения с Supabase:', error.message);
+        return false;
+    }
+}
+
+// Вспомогательные функции
 const supabaseHelpers = {
     // Получение всех видео
     async getVideos(filter = 'all', limit = 50) {
@@ -33,6 +52,7 @@ const supabaseHelpers = {
             }
             
             const { data, error } = await query.limit(limit);
+            
             if (error) throw error;
             return { data, error: null };
         } catch (error) {
@@ -41,7 +61,7 @@ const supabaseHelpers = {
         }
     },
 
-    // Получение одного видео по ID
+    // Получение видео по ID
     async getVideoById(videoId) {
         try {
             const { data, error } = await supabaseClient
@@ -58,7 +78,7 @@ const supabaseHelpers = {
         }
     },
 
-    // Добавление нового видео
+    // Добавление видео
     async insertVideo(videoData) {
         try {
             const { data, error } = await supabaseClient
@@ -74,7 +94,7 @@ const supabaseHelpers = {
         }
     },
 
-    // Увеличение счетчика просмотров
+    // Увеличение просмотров
     async incrementViews(videoId) {
         try {
             const { error } = await supabaseClient.rpc('increment_views', { 
@@ -106,7 +126,7 @@ const supabaseHelpers = {
         }
     },
 
-    // Получение рекомендованных видео (исключая текущее)
+    // Рекомендации
     async getRecommendedVideos(currentVideoId, limit = 10) {
         try {
             const { data, error } = await supabaseClient
@@ -129,7 +149,7 @@ const supabaseHelpers = {
         return supabaseClient.auth.getUser();
     },
 
-    // Выход из системы
+    // Выход
     async signOut() {
         try {
             const { error } = await supabaseClient.auth.signOut();
@@ -139,11 +159,21 @@ const supabaseHelpers = {
             console.error('Ошибка выхода:', error);
             return { success: false, error };
         }
-    }
+    },
+
+    // Тест соединения
+    testConnection
 };
 
 // Делаем функции доступными глобально
 window.supabaseClient = supabaseClient;
 window.supabaseHelpers = supabaseHelpers;
 
-console.log('Supabase инициализирован успешно');
+// Тестируем соединение при загрузке
+testConnection().then(success => {
+    if (success) {
+        console.log('🚀 FreeTube готов к работе!');
+    } else {
+        console.warn('⚠️ Проверьте настройки Supabase');
+    }
+});
