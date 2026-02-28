@@ -47,7 +47,7 @@ function initializeEventListeners() {
             if (file && file.type.startsWith('video/')) {
                 handleVideoSelect(file);
             } else {
-                showNotification('Пожалуйста, выберите видео файл', 'error');
+                alert('Пожалуйста, выберите видео файл');
             }
         });
     }
@@ -130,28 +130,42 @@ async function convertVideoToBase64(file) {
 
 // Создание превью
 async function generateThumbnail(videoFile) {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        video.src = URL.createObjectURL(videoFile);
-        video.currentTime = 1; // Берем кадр на 1 секунде
-        
-        video.onloadeddata = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+    return new Promise((resolve, reject) => {
+        try {
+            const video = document.createElement('video');
+            video.src = URL.createObjectURL(videoFile);
+            video.currentTime = 1; // Берем кадр на 1 секунде
             
-            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            video.onloadeddata = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Конвертируем в Base64 (сжимаем до 80% качества)
+                    const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    // Очищаем
+                    URL.revokeObjectURL(video.src);
+                    
+                    resolve(thumbnail);
+                } catch (err) {
+                    reject(err);
+                }
+            };
             
-            // Конвертируем в Base64 (сжимаем до 80% качества)
-            const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
-            resolve(thumbnail);
-            
-            URL.revokeObjectURL(video.src);
-        };
+            video.onerror = () => {
+                reject(new Error('Ошибка загрузки видео для превью'));
+            };
+        } catch (error) {
+            reject(error);
+        }
     });
 }
 
-// Функция показа уведомлений (только одна!)
+// Функция показа уведомлений
 function showNotification(message, type = 'info') {
     // Удаляем предыдущее уведомление если есть
     const existingNotification = document.querySelector('.notification');
@@ -163,25 +177,16 @@ function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 20px;
-        background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#ff4444' : '#2196f3'};
-        color: white;
-        border-radius: 8px;
-        z-index: 9999;
-        animation: slideIn 0.3s ease;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    `;
-    
     document.body.appendChild(notification);
     
     // Удаляем через 3 секунды
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 300);
     }, 3000);
 }
 
@@ -189,7 +194,6 @@ function showNotification(message, type = 'info') {
 async function uploadVideo() {
     const title = document.getElementById('title').value.trim();
     const description = document.getElementById('description').value.trim();
-    const quality = document.getElementById('quality').value;
     
     if (!title) {
         showNotification('Введите название видео', 'error');
@@ -292,7 +296,8 @@ async function uploadVideo() {
 // Обработка ошибок глобально
 window.addEventListener('error', function(e) {
     console.error('Глобальная ошибка:', e.error);
-    if (e.error.message !== 'ResizeObserver loop limit exceeded') {
+    // Игнорируем ошибки ResizeObserver (они не критичны)
+    if (e.error && e.error.message && !e.error.message.includes('ResizeObserver')) {
         alert('Произошла ошибка: ' + e.error.message);
     }
 });
