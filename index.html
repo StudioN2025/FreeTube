@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeTube - Бесплатное видео</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f0f;
+            color: #fff;
+        }
+
+        header {
+            background-color: #202020;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #383838;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            color: #ff4d4d;
+        }
+
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            margin-left: 20px;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+
+        nav a:hover {
+            background-color: #383838;
+        }
+
+        main {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .video-card {
+            background-color: #202020;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        .video-card:hover {
+            transform: scale(1.03);
+        }
+
+        .video-thumbnail {
+            width: 100%;
+            height: 150px;
+            background-color: #2c2c2c;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-thumbnail video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+        }
+
+        .video-info {
+            padding: 0.8rem;
+        }
+
+        .video-title {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-bottom: 0.3rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .video-description {
+            font-size: 0.8rem;
+            color: #aaa;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .video-date {
+            font-size: 0.7rem;
+            color: #888;
+            margin-top: 0.3rem;
+        }
+
+        .upload-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        textarea,
+        input[type="file"] {
+            width: 100%;
+            padding: 0.8rem;
+            background-color: #202020;
+            border: 1px solid #383838;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        small {
+            color: #ffaa33;
+            display: block;
+            margin-top: 0.5rem;
+        }
+
+        button {
+            background-color: #ff4d4d;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #ff3333;
+        }
+
+        .video-player-container {
+            max-width: 800px;
+            margin: 2rem auto;
+        }
+
+        .video-player-wrapper video {
+            width: 100%;
+            max-height: 70vh;
+            background: black;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .video-description-full {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #2c2c2c;
+            border-radius: 4px;
+        }
+
+        .video-description-full h3 {
+            margin-bottom: 0.5rem;
+            color: #ff4d4d;
+        }
+
+        .video-meta {
+            margin-top: 1rem;
+            color: #888;
+        }
+
+        #progress-area {
+            margin: 1rem 0;
+            padding: 1rem;
+            background-color: #202020;
+            border-radius: 4px;
+        }
+
+        progress {
+            width: 100%;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        progress::-webkit-progress-bar {
+            background-color: #2c2c2c;
+        }
+
+        progress::-webkit-progress-value {
+            background-color: #ff4d4d;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .nav-link {
+            cursor: pointer;
+        }
+
+        .back-button {
+            background-color: #383838;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        .back-button:hover {
+            background-color: #4a4a4a;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🎬 FreeTube</h1>
+        <nav>
+            <a class="nav-link" onclick="showPage('home')">Главная</a>
+            <a class="nav-link" onclick="showPage('upload')">Загрузить видео</a>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Главная страница -->
+        <div id="home-page" class="page active">
+            <h2>Рекомендации</h2>
+            <div id="video-grid" class="video-grid">
+                <p>Загрузка видео...</p>
+            </div>
+        </div>
+
+        <!-- Страница загрузки -->
+        <div id="upload-page" class="page">
+            <button class="back-button" onclick="showPage('home')">← Назад</button>
+            <div class="upload-container">
+                <form id="upload-form">
+                    <div class="form-group">
+                        <label for="title">Название видео:</label>
+                        <input type="text" id="title" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Описание:</label>
+                        <textarea id="description" rows="4"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="video-file">Выберите видео (MP4):</label>
+                        <input type="file" id="video-file" accept="video/mp4" required>
+                        <small>⚠️ Видео будет преобразовано в Base64. Выбирайте файлы до 10MB!</small>
+                    </div>
+
+                    <div id="progress-area" style="display: none;">
+                        <progress id="progress-bar" value="0" max="100"></progress>
+                        <p id="progress-text">Конвертация... 0%</p>
+                    </div>
+
+                    <button type="submit">Опубликовать</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Страница плеера -->
+        <div id="player-page" class="page">
+            <button class="back-button" onclick="showPage('home')">← Назад</button>
+            <div class="video-player-container">
+                <div id="video-container">
+                    <p>Загрузка видео...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Конфигурация Appwrite
+        const APPWRITE_CONFIG = {
+            endpoint: 'https://sgp.cloud.appwrite.io/v1',
+            projectId: '69a3134e00396e25bece',
+            databaseId: '69a3136100029295a7d3',
+            collectionId: '69a3137f0019afffbdf2'
+        };
+
+        let databases;
+        let Query;
+        let ID;
+
+        // Навигация между страницами
+        function showPage(pageName) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(pageName + '-page').classList.add('active');
+            
+            if (pageName === 'home') {
+                loadVideos();
+            }
+        }
+
+        // Функция инициализации Appwrite
+        function initAppwrite() {
+            try {
+                if (typeof Appwrite === 'undefined') {
+                    console.error('❌ Appwrite SDK не загружен');
+                    return false;
+                }
+
+                const { Client, Databases, ID: AppwriteID, Query: AppwriteQuery } = Appwrite;
+                
+                const client = new Client()
+                    .setEndpoint(APPWRITE_CONFIG.endpoint)
+                    .setProject(APPWRITE_CONFIG.projectId);
+                
+                databases = new Databases(client);
+                ID = AppwriteID;
+                Query = AppwriteQuery;
+                
+                console.log('✅ Appwrite инициализирован');
+                return true;
+            } catch (error) {
+                console.error('❌ Ошибка:', error);
+                return false;
+            }
+        }
+
+        // Загрузка видео на главную
+        async function loadVideos() {
+            const grid = document.getElementById('video-grid');
+            if (!grid) return;
+
+            if (!initAppwrite()) {
+                grid.innerHTML = '<p>❌ Ошибка подключения к базе данных</p>';
+                return;
+            }
+
+            try {
+                const response = await databases.listDocuments(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.collectionId
+                );
+
+                if (!response.documents || response.documents.length === 0) {
+                    grid.innerHTML = '<p>📹 Пока нет видео. <a onclick="showPage(\'upload\')" style="color:#ff4d4d; cursor:pointer;">Загрузите первое видео!</a></p>';
+                    return;
+                }
+
+                grid.innerHTML = '';
+                
+                response.documents.forEach(doc => {
+                    const card = createVideoCard(doc);
+                    grid.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error('❌ Ошибка:', error);
+                grid.innerHTML = `<p>❌ Ошибка: ${error.message}</p>`;
+            }
+        }
+
+        // Создание карточки видео
+        function createVideoCard(video) {
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            card.onclick = () => {
+                playVideo(video.$id);
+            };
+
+            let thumbnailHtml = '<div style="color:white; padding:20px; text-align:center;">🎬 Нет превью</div>';
+            
+            if (video.videoData) {
+                thumbnailHtml = `<video src="${video.videoData}" preload="metadata"></video>`;
+            }
+
+            card.innerHTML = `
+                <div class="video-thumbnail">
+                    ${thumbnailHtml}
+                </div>
+                <div class="video-info">
+                    <div class="video-title">${escapeHtml(video.title) || 'Без названия'}</div>
+                    <div class="video-description">${escapeHtml(video.description) || 'Нет описания'}</div>
+                    <div class="video-date">${formatDate(video.createdAt)}</div>
+                </div>
+            `;
+            return card;
+        }
+
+        // Плеер
+        async function playVideo(videoId) {
+            showPage('player');
+            
+            const container = document.getElementById('video-container');
+            container.innerHTML = '<p>Загрузка видео...</p>';
+
+            if (!initAppwrite()) {
+                container.innerHTML = '<p>❌ Ошибка подключения к базе данных</p>';
+                return;
+            }
+
+            try {
+                const video = await databases.getDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.collectionId,
+                    videoId
+                );
+
+                if (!video.videoData) {
+                    container.innerHTML = '<p>❌ Видео отсутствует</p>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="video-player-wrapper">
+                        <h2>${escapeHtml(video.title)}</h2>
+                        <video controls autoplay preload="auto">
+                            <source src="${video.videoData}" type="video/mp4">
+                            Ваш браузер не поддерживает видео тег.
+                        </video>
+                        <div class="video-description-full">
+                            <h3>Описание:</h3>
+                            <p>${escapeHtml(video.description) || 'Нет описания'}</p>
+                        </div>
+                        <div class="video-meta">
+                            <small>Загружено: ${formatDate(video.createdAt)}</small>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('❌ Ошибка:', error);
+                container.innerHTML = `<p>❌ Ошибка: ${error.message}</p>`;
+            }
+        }
+
+        // Загрузка видео
+        if (document.getElementById('upload-form')) {
+            document.getElementById('upload-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                if (!initAppwrite()) {
+                    alert('❌ Ошибка подключения к базе данных');
+                    return;
+                }
+
+                const title = document.getElementById('title').value;
+                const description = document.getElementById('description').value;
+                const fileInput = document.getElementById('video-file');
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    alert('❌ Выберите видео');
+                    return;
+                }
+
+                const progressArea = document.getElementById('progress-area');
+                const progressBar = document.getElementById('progress-bar');
+                const progressText = document.getElementById('progress-text');
+                progressArea.style.display = 'block';
+
+                try {
+                    progressText.textContent = '🔄 Конвертация...';
+                    
+                    const base64Video = await fileToBase64(file);
+
+                    progressText.textContent = '💾 Сохранение...';
+
+                    await databases.createDocument(
+                        APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.collectionId,
+                        ID.unique(),
+                        {
+                            title: title,
+                            description: description,
+                            videoData: base64Video,
+                            createdAt: new Date().toISOString()
+                        }
+                    );
+
+                    alert('✅ Видео опубликовано!');
+                    showPage('home');
+                    loadVideos();
+
+                } catch (error) {
+                    console.error('❌ Ошибка:', error);
+                    alert('❌ Ошибка: ' + error.message);
+                    progressArea.style.display = 'none';
+                }
+            });
+        }
+
+        // Конвертация в Base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Защита от XSS
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU');
+        }
+
+        // Загрузка при старте
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('FreeTube загружен');
+            loadVideos();
+        });
+    </script>
+
+    <!-- Подключаем Appwrite SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1/dist/umd/sdk.js"></script>
+</body>
+</html>
