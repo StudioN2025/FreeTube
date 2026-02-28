@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeTube - Бесплатное видео</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Подключаем Appwrite SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1/dist/umd/sdk.js"></script>
+</head>
+<body>
+    <header>
+        <h1>🎬 FreeTube</h1>
+        <nav>
+            <a href="index.html">Главная</a>
+            <a href="upload.html">Загрузить видео</a>
+        </nav>
+    </header>
+
+    <main>
+        <h2>Рекомендации</h2>
+        <div id="video-grid" class="video-grid">
+            <!-- Сюда JavaScript загрузит видео -->
+            <p>Загрузка видео...</p>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+    <script>
+        // Загружаем видео при загрузке страницы
+        document.addEventListener('DOMContentLoaded', loadVideos);
+    </script>
+</body>
+</html>
