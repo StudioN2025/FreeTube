@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FreeTube - Свободное видео</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- Сначала подключаем Supabase CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config/supabase.js"></script>
 </head>
 <body>
     <header>
@@ -37,6 +37,8 @@
         </div>
     </main>
 
+    <!-- Подключаем скрипты в правильном порядке -->
+    <script src="config/supabase.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>
