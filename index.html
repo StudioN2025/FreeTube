@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FreeTube - Свободное видео</title>
     <link rel="stylesheet" href="css/style.css">
-    <!-- Сначала подключаем Supabase CDN -->
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -33,11 +33,11 @@
         </div>
 
         <div class="videos-grid" id="videosContainer">
-            <!-- Видео будут загружаться сюда -->
+            <div class="loading">Загрузка видео...</div>
         </div>
     </main>
 
-    <!-- Подключаем скрипты в правильном порядке -->
+    <!-- Подключаем скрипты -->
     <script src="config/supabase.js"></script>
     <script src="js/main.js"></script>
 </body>
