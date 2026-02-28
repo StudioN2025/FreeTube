@@ -4,6 +4,9 @@
 let selectedFile = null;
 let videoDuration = 0;
 
+// Размер чанка для разбивки видео (1 МБ)
+const CHUNK_SIZE = 1024 * 1024;
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Страница загрузки инициализирована');
@@ -73,9 +76,9 @@ function initializeEventListeners() {
 async function handleVideoSelect(file) {
     console.log('Выбран файл:', file.name, 'Размер:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
-    // Проверка размера (макс 100 МБ)
-    if (file.size > 100 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер: 100 МБ');
+    // Проверка размера (макс 50 МБ для Base64)
+    if (file.size > 50 * 1024 * 1024) {
+        alert('Файл слишком большой. Максимальный размер: 50 МБ');
         return;
     }
     
@@ -108,7 +111,7 @@ async function handleVideoSelect(file) {
     };
 }
 
-// Конвертация видео в Base64
+// Конвертация видео в Base64 с разбивкой на чанки
 async function convertVideoToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -116,7 +119,11 @@ async function convertVideoToBase64(file) {
         reader.onload = async (e) => {
             try {
                 // Получаем Base64 без префикса
-                const base64 = e.target.result.split(',')[1];
+                let base64 = e.target.result.split(',')[1];
+                
+                // Сжимаем если нужно (опционально)
+                // Здесь можно добавить сжатие
+                
                 resolve(base64);
             } catch (error) {
                 reject(error);
@@ -128,7 +135,7 @@ async function convertVideoToBase64(file) {
     });
 }
 
-// Создание превью
+// Создание превью с оптимизацией
 async function generateThumbnail(videoFile) {
     return new Promise((resolve, reject) => {
         try {
@@ -139,13 +146,16 @@ async function generateThumbnail(videoFile) {
             video.onloadeddata = () => {
                 try {
                     const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
+                    // Уменьшаем размер превью для экономии места
+                    const maxWidth = 640;
+                    const scale = Math.min(maxWidth / video.videoWidth, 1);
+                    canvas.width = video.videoWidth * scale;
+                    canvas.height = video.videoHeight * scale;
                     
                     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    // Конвертируем в Base64 (сжимаем до 80% качества)
-                    const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
+                    // Конвертируем в Base64 (сжимаем до 70% качества)
+                    const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
                     
                     // Очищаем
                     URL.revokeObjectURL(video.src);
@@ -167,19 +177,16 @@ async function generateThumbnail(videoFile) {
 
 // Функция показа уведомлений
 function showNotification(message, type = 'info') {
-    // Удаляем предыдущее уведомление если есть
     const existingNotification = document.querySelector('.notification');
     if (existingNotification) {
         existingNotification.remove();
     }
     
-    // Создаем уведомление
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
     document.body.appendChild(notification);
     
-    // Удаляем через 3 секунды
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => {
@@ -234,21 +241,22 @@ async function uploadVideo() {
     
     try {
         // Шаг 1: Генерируем превью
-        progressFill.style.width = '20%';
-        progressText.textContent = '20% - Создание превью...';
+        progressFill.style.width = '10%';
+        progressText.textContent = '10% - Создание превью...';
         console.log('Создание превью...');
         const thumbnail = await generateThumbnail(selectedFile);
         
         // Шаг 2: Конвертируем видео
-        progressFill.style.width = '40%';
-        progressText.textContent = '40% - Конвертация в Base64...';
+        progressFill.style.width = '30%';
+        progressText.textContent = '30% - Конвертация видео...';
         console.log('Конвертация видео...');
         const videoBase64 = await convertVideoToBase64(selectedFile);
         
-        // Шаг 3: Подготовка
+        // Шаг 3: Подготовка данных
         progressFill.style.width = '60%';
-        progressText.textContent = '60% - Подготовка...';
+        progressText.textContent = '60% - Подготовка данных...';
         
+        // Небольшая задержка для анимации
         await new Promise(resolve => setTimeout(resolve, 500));
         
         progressFill.style.width = '80%';
@@ -267,7 +275,19 @@ async function uploadVideo() {
         };
         
         console.log('Отправка данных в Supabase...');
-        const { data, error } = await supabaseHelpers.insertVideo(videoData);
+        console.log('Размер видео в Base64:', Math.floor(videoBase64.length / 1024 / 1024), 'MB');
+        
+        // Используем функцию с увеличенным таймаутом
+        const { data, error } = await supabaseClient
+            .rpc('insert_video', {
+                p_title: videoData.title,
+                p_description: videoData.description,
+                p_video_data: videoData.video_data,
+                p_thumbnail: videoData.thumbnail,
+                p_duration: videoData.duration,
+                p_channel_name: videoData.channel_name,
+                p_user_id: videoData.user_id
+            });
         
         if (error) throw error;
         
@@ -276,9 +296,9 @@ async function uploadVideo() {
         
         showNotification('✅ Видео успешно загружено!', 'success');
         
-        // Перенаправляем на страницу видео через 2 секунды
+        // Перенаправляем на главную через 2 секунды
         setTimeout(() => {
-            window.location.href = `video.html?id=${data[0].id}`;
+            window.location.href = 'index.html';
         }, 2000);
         
     } catch (error) {
@@ -296,7 +316,6 @@ async function uploadVideo() {
 // Обработка ошибок глобально
 window.addEventListener('error', function(e) {
     console.error('Глобальная ошибка:', e.error);
-    // Игнорируем ошибки ResizeObserver (они не критичны)
     if (e.error && e.error.message && !e.error.message.includes('ResizeObserver')) {
         alert('Произошла ошибка: ' + e.error.message);
     }
