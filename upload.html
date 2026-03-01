@@ -294,8 +294,26 @@
             throw new Error('Supabase SDK не загружен');
         }
 
-        // Инициализация Supabase клиента
-        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        // Инициализация Supabase клиента с увеличенными таймаутами
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+            auth: {
+                autoRefreshToken: true,
+                persistSession: true
+            },
+            global: {
+                headers: { 'X-Client-Info': 'freetube' },
+                fetch: (url, options) => {
+                    // Увеличиваем таймаут до 10 минут
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 минут
+                    
+                    return fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    }).finally(() => clearTimeout(timeoutId));
+                }
+            }
+        });
 
         // Вспомогательные функции
         const supabaseHelpers = {
