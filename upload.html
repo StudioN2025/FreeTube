@@ -362,24 +362,29 @@
                 }
             },
 
-            // Добавление видео через RPC функцию с увеличенным таймаутом
+            // Добавление видео - прямой INSERT без RPC
             async insertVideo(videoData) {
                 try {
+                    console.log('Прямая вставка видео в таблицу...');
                     const { data, error } = await supabaseClient
-                        .rpc('insert_video', {
-                            p_title: videoData.title,
-                            p_description: videoData.description,
-                            p_video_data: videoData.video_data,
-                            p_thumbnail: videoData.thumbnail,
-                            p_duration: videoData.duration,
-                            p_channel_name: videoData.channel_name,
-                            p_user_id: videoData.user_id
-                        });
+                        .from('videos')
+                        .insert([{
+                            title: videoData.title,
+                            description: videoData.description,
+                            video_data: videoData.video_data,
+                            thumbnail: videoData.thumbnail,
+                            duration: videoData.duration,
+                            views: 0,
+                            channel_name: videoData.channel_name,
+                            user_id: videoData.user_id
+                        }])
+                        .select();
                     
                     if (error) throw error;
+                    console.log('✅ Видео успешно вставлено!');
                     return { data, error: null };
                 } catch (error) {
-                    console.error('Ошибка вставки видео:', error);
+                    console.error('❌ Ошибка вставки видео:', error);
                     return { data: null, error };
                 }
             },
@@ -505,7 +510,7 @@
         <h1>Загрузить видео</h1>
         
         <div class="quality-info">
-            <strong>⚠️ Важно:</strong> Максимальный размер видео: <strong>50 МБ</strong> (из-за ограничений Base64)
+            <strong>⚠️ Важно:</strong> Максимальный размер видео: <strong>100 МБ</strong> (разбивается на чанки)
         </div>
         
         <div class="upload-area" id="uploadArea">
@@ -513,7 +518,7 @@
             <div class="upload-content">
                 <div class="upload-icon">📹</div>
                 <p>Нажмите для выбора видео или перетащите файл сюда</p>
-                <small>Максимальный размер: 50 МБ</small>
+                <small>Максимальный размер: 100 МБ</small>
                 <div class="format-info">
                     <i>Поддерживаемые форматы: MP4, WebM, OGG, MOV</i>
                 </div>
