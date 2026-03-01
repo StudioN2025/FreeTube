@@ -5,12 +5,323 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Просмотр видео - FreeTube</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* Стили для страницы видео */
+        .video-page {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .video-container video {
+            width: 100%;
+            max-height: 70vh;
+            background: #000;
+            border-radius: 8px;
+        }
+
+        .video-info {
+            margin-top: 1rem;
+        }
+
+        .video-info h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .video-stats {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1rem 0;
+            padding: 1rem 0;
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+        }
+
+        .channel-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .channel-details h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .channel-details p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .subscribe-btn {
+            padding: 0.5rem 1rem;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+
+        .description-box {
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            margin: 1rem 0;
+            white-space: pre-wrap;
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 80px;
+            height: fit-content;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .recommended-card {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .recommended-card:hover {
+            background-color: #f5f5f5;
+        }
+
+        .recommended-thumbnail {
+            width: 120px;
+            height: 67.5px;
+            background-color: #ddd;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .recommended-info h4 {
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            line-height: 1.3;
+        }
+
+        .recommended-info p {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            color: white;
+            border-radius: 8px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .notification.success { background-color: #4caf50; }
+        .notification.error { background-color: #ff4444; }
+        .notification.info { background-color: #2196f3; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 50px;
+            color: #ff4444;
+        }
+
+        @media (max-width: 768px) {
+            .video-page {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: static;
+            }
+        }
+    </style>
+    
+    <!-- Конфигурация Supabase (такая же как в upload.html) -->
+    <script>
+        // Конфигурация Supabase
+        const SUPABASE_CONFIG = {
+            url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
+        };
+
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase SDK не загружен!');
+            throw new Error('Supabase SDK не загружен');
+        }
+
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+        // Вспомогательные функции
+        const supabaseHelpers = {
+            // Получение видео по ID
+            async getVideoById(videoId) {
+                try {
+                    console.log('Загрузка видео с ID:', videoId);
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .eq('id', videoId)
+                        .single();
+                    
+                    if (error) throw error;
+                    
+                    // Если есть чанки, собираем видео
+                    if (data && data.total_chunks > 0) {
+                        const chunks = await this.getVideoChunks(videoId);
+                        if (chunks && chunks.length > 0) {
+                            // Сортируем чанки по индексу
+                            chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+                            // Собираем все чанки в одну строку
+                            const videoData = chunks.map(c => c.chunk_data).join('');
+                            data.video_data = videoData;
+                        }
+                    }
+                    
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения видео:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Получение чанков видео
+            async getVideoChunks(videoId) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('video_chunks')
+                        .select('*')
+                        .eq('video_id', videoId)
+                        .order('chunk_index', { ascending: true });
+                    
+                    if (error) throw error;
+                    return data;
+                } catch (error) {
+                    console.error('Ошибка получения чанков:', error);
+                    return null;
+                }
+            },
+
+            // Увеличение просмотров
+            async incrementViews(videoId) {
+                try {
+                    const { error } = await supabaseClient.rpc('increment_views', { 
+                        video_id: videoId 
+                    });
+                    
+                    if (error) throw error;
+                    return { success: true, error: null };
+                } catch (error) {
+                    console.error('Ошибка обновления просмотров:', error);
+                    return { success: false, error };
+                }
+            },
+
+            // Рекомендации
+            async getRecommendedVideos(currentVideoId, limit = 10) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .neq('id', currentVideoId)
+                        .order('views', { ascending: false })
+                        .limit(limit);
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения рекомендаций:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Получение текущего пользователя
+            getCurrentUser() {
+                return supabaseClient.auth.getUser();
+            },
+
+            // Проверка соединения
+            async testConnection() {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('count', { count: 'exact', head: true });
+                    
+                    if (error) throw error;
+                    console.log('✅ Соединение с Supabase установлено');
+                    return true;
+                } catch (error) {
+                    console.error('❌ Ошибка соединения с Supabase:', error.message);
+                    return false;
+                }
+            }
+        };
+
+        // Делаем функции доступными глобально
+        window.supabaseClient = supabaseClient;
+        window.supabaseHelpers = supabaseHelpers;
+
+        // Тестируем соединение
+        supabaseHelpers.testConnection();
+        console.log('🚀 FreeTube Video инициализирован');
+    </script>
 </head>
 <body>
     <header>
         <nav class="navbar">
             <div class="nav-left">
                 <a href="/" class="logo">FreeTube</a>
+            </div>
+            <div class="nav-right" id="navRight">
+                <!-- Динамически заполняется -->
             </div>
         </nav>
     </header>
@@ -20,39 +331,447 @@
             <video id="videoPlayer" controls></video>
             
             <div class="video-info">
-                <h1 id="videoTitle"></h1>
+                <h1 id="videoTitle">Загрузка...</h1>
                 
                 <div class="video-stats">
-                    <span id="viewCount">0 просмотров</span>
+                    <span id="viewCount">0 просмотров</span> • 
                     <span id="uploadDate"></span>
                 </div>
 
                 <div class="channel-info">
-                    <div class="channel-avatar"></div>
+                    <div class="channel-avatar" id="channelAvatar">U</div>
                     <div class="channel-details">
-                        <h3 id="channelName"></h3>
+                        <h3 id="channelName">FreeTube User</h3>
                     </div>
-                    <button class="subscribe-btn">Подписаться</button>
                 </div>
 
                 <div class="description-box">
                     <p id="videoDescription"></p>
                 </div>
             </div>
+        </div>
 
-            <div class="comments-section">
-                <h3>Комментарии</h3>
-                <textarea placeholder="Добавить комментарий..."></textarea>
-                <button>Отправить</button>
+        <div class="sidebar">
+            <h3>Рекомендации</h3>
+            <div id="recommendedVideos">
+                <div class="loading">Загрузка рекомендаций...</div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/video.js"></script>
+    
+    <script>
+        // Обновляем навигацию
+        document.addEventListener('DOMContentLoaded', async function() {
+            const navRight = document.getElementById('navRight');
+            
+            try {
+                const { data: { user } } = await supabaseHelpers.getCurrentUser();
+                
+                if (user) {
+                    const email = user.email || 'User';
+                    const initial = email.charAt(0).toUpperCase();
+                    
+                    navRight.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 32px; height: 32px; border-radius: 50%; background-color: #ff0000; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${initial}</div>
+                            <span>${email}</span>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+            }
+        });
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Просмотр видео - FreeTube</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* Стили для страницы видео */
+        .video-page {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .video-container video {
+            width: 100%;
+            max-height: 70vh;
+            background: #000;
+            border-radius: 8px;
+        }
+
+        .video-info {
+            margin-top: 1rem;
+        }
+
+        .video-info h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .video-stats {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1rem 0;
+            padding: 1rem 0;
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+        }
+
+        .channel-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .channel-details h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .channel-details p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .subscribe-btn {
+            padding: 0.5rem 1rem;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+
+        .description-box {
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            margin: 1rem 0;
+            white-space: pre-wrap;
+        }
+
+        .sidebar {
+            position: sticky;
+            top: 80px;
+            height: fit-content;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .recommended-card {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .recommended-card:hover {
+            background-color: #f5f5f5;
+        }
+
+        .recommended-thumbnail {
+            width: 120px;
+            height: 67.5px;
+            background-color: #ddd;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .recommended-info h4 {
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            line-height: 1.3;
+        }
+
+        .recommended-info p {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            color: white;
+            border-radius: 8px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .notification.success { background-color: #4caf50; }
+        .notification.error { background-color: #ff4444; }
+        .notification.info { background-color: #2196f3; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 50px;
+            color: #ff4444;
+        }
+
+        @media (max-width: 768px) {
+            .video-page {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: static;
+            }
+        }
+    </style>
+    
+    <!-- Конфигурация Supabase (такая же как в upload.html) -->
+    <script>
+        // Конфигурация Supabase
+        const SUPABASE_CONFIG = {
+            url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
+        };
+
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase SDK не загружен!');
+            throw new Error('Supabase SDK не загружен');
+        }
+
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+        // Вспомогательные функции
+        const supabaseHelpers = {
+            // Получение видео по ID
+            async getVideoById(videoId) {
+                try {
+                    console.log('Загрузка видео с ID:', videoId);
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .eq('id', videoId)
+                        .single();
+                    
+                    if (error) throw error;
+                    
+                    // Если есть чанки, собираем видео
+                    if (data && data.total_chunks > 0) {
+                        const chunks = await this.getVideoChunks(videoId);
+                        if (chunks && chunks.length > 0) {
+                            // Сортируем чанки по индексу
+                            chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+                            // Собираем все чанки в одну строку
+                            const videoData = chunks.map(c => c.chunk_data).join('');
+                            data.video_data = videoData;
+                        }
+                    }
+                    
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения видео:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Получение чанков видео
+            async getVideoChunks(videoId) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('video_chunks')
+                        .select('*')
+                        .eq('video_id', videoId)
+                        .order('chunk_index', { ascending: true });
+                    
+                    if (error) throw error;
+                    return data;
+                } catch (error) {
+                    console.error('Ошибка получения чанков:', error);
+                    return null;
+                }
+            },
+
+            // Увеличение просмотров
+            async incrementViews(videoId) {
+                try {
+                    const { error } = await supabaseClient.rpc('increment_views', { 
+                        video_id: videoId 
+                    });
+                    
+                    if (error) throw error;
+                    return { success: true, error: null };
+                } catch (error) {
+                    console.error('Ошибка обновления просмотров:', error);
+                    return { success: false, error };
+                }
+            },
+
+            // Рекомендации
+            async getRecommendedVideos(currentVideoId, limit = 10) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .neq('id', currentVideoId)
+                        .order('views', { ascending: false })
+                        .limit(limit);
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения рекомендаций:', error);
+                    return { data: null, error };
+                }
+            },
+
+            // Получение текущего пользователя
+            getCurrentUser() {
+                return supabaseClient.auth.getUser();
+            },
+
+            // Проверка соединения
+            async testConnection() {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('count', { count: 'exact', head: true });
+                    
+                    if (error) throw error;
+                    console.log('✅ Соединение с Supabase установлено');
+                    return true;
+                } catch (error) {
+                    console.error('❌ Ошибка соединения с Supabase:', error.message);
+                    return false;
+                }
+            }
+        };
+
+        // Делаем функции доступными глобально
+        window.supabaseClient = supabaseClient;
+        window.supabaseHelpers = supabaseHelpers;
+
+        // Тестируем соединение
+        supabaseHelpers.testConnection();
+        console.log('🚀 FreeTube Video инициализирован');
+    </script>
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="nav-left">
+                <a href="/" class="logo">FreeTube</a>
+            </div>
+            <div class="nav-right" id="navRight">
+                <!-- Динамически заполняется -->
+            </div>
+        </nav>
+    </header>
+
+    <main class="video-page">
+        <div class="video-container">
+            <video id="videoPlayer" controls></video>
+            
+            <div class="video-info">
+                <h1 id="videoTitle">Загрузка...</h1>
+                
+                <div class="video-stats">
+                    <span id="viewCount">0 просмотров</span> • 
+                    <span id="uploadDate"></span>
+                </div>
+
+                <div class="channel-info">
+                    <div class="channel-avatar" id="channelAvatar">U</div>
+                    <div class="channel-details">
+                        <h3 id="channelName">FreeTube User</h3>
+                    </div>
+                </div>
+
+                <div class="description-box">
+                    <p id="videoDescription"></p>
+                </div>
             </div>
         </div>
 
         <div class="sidebar">
             <h3>Рекомендации</h3>
-            <div id="recommendedVideos"></div>
+            <div id="recommendedVideos">
+                <div class="loading">Загрузка рекомендаций...</div>
+            </div>
         </div>
     </main>
 
     <script src="js/video.js"></script>
+    
+    <script>
+        // Обновляем навигацию
+        document.addEventListener('DOMContentLoaded', async function() {
+            const navRight = document.getElementById('navRight');
+            
+            try {
+                const { data: { user } } = await supabaseHelpers.getCurrentUser();
+                
+                if (user) {
+                    const email = user.email || 'User';
+                    const initial = email.charAt(0).toUpperCase();
+                    
+                    navRight.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 32px; height: 32px; border-radius: 50%; background-color: #ff0000; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${initial}</div>
+                            <span>${email}</span>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+            }
+        });
+    </script>
 </body>
 </html>
