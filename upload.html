@@ -4,438 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Загрузить видео - FreeTube</title>
-    <!-- Подключаем CSS -->
     <link rel="stylesheet" href="css/style.css">
-    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
-        /* Дополнительные стили только для страницы загрузки */
-        .upload-container {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 2rem;
-        }
-
-        .upload-area {
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-            padding: 3rem;
-            text-align: center;
-            cursor: pointer;
-            transition: border-color 0.3s;
-            background: white;
-        }
-
-        .upload-area:hover {
-            border-color: #ff0000;
-        }
-
-        .upload-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-
-        .video-preview video {
-            width: 100%;
-            max-height: 400px;
-            border-radius: 8px;
-            margin: 1rem 0;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-            color: #333;
-        }
-
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #ff0000;
-            box-shadow: 0 0 0 2px rgba(255,0,0,0.1);
-        }
-
-        .submit-btn {
-            width: 100%;
-            padding: 1rem;
-            background-color: #ff0000;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .submit-btn:hover {
-            background-color: #cc0000;
-        }
-
-        .submit-btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-
-        .progress-bar {
-            margin-top: 1rem;
-            height: 30px;
-            background-color: #f0f0f0;
-            border-radius: 15px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background-color: #ff0000;
-            width: 0%;
-            transition: width 0.3s;
-        }
-
-        .progress-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #333;
-            font-weight: 600;
-            text-shadow: 0 0 5px white;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #333;
-        }
-
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background-color: #ff0000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-
-        #logoutBtn {
-            padding: 0.5rem 1rem;
-            background-color: #f0f0f0;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            color: #333;
-            transition: all 0.3s;
-        }
-
-        #logoutBtn:hover {
-            background-color: #ff0000;
-            color: white;
-        }
-
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            color: white;
-            border-radius: 8px;
-            z-index: 9999;
-            animation: slideIn 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .notification.success {
-            background-color: #4caf50;
-        }
-
-        .notification.error {
-            background-color: #ff4444;
-        }
-
-        .notification.info {
-            background-color: #2196f3;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .format-info {
-            margin-top: 10px;
-            color: #666;
-            font-size: 12px;
-        }
-
-        .format-info i {
-            color: #ff0000;
-        }
-
-        .file-size-warning {
-            color: #ff4444;
-            font-size: 12px;
-            margin-top: 5px;
-            font-weight: 500;
-        }
-
-        .quality-info {
-            background-color: #f8f8f8;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            border-left: 4px solid #ff0000;
-        }
-
-        .quality-info strong {
-            color: #ff0000;
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-        }
-
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 2rem;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #ff0000;
-            text-decoration: none;
-        }
-
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        small {
-            color: #666;
-            display: block;
-            margin-top: 5px;
-        }
+        /* Ваши стили */
+        .upload-container { max-width: 800px; margin: 2rem auto; padding: 2rem; }
+        .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 3rem; text-align: center; cursor: pointer; transition: border-color 0.3s; background: white; }
+        .upload-area:hover { border-color: #ff0000; }
+        .upload-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .video-preview video { width: 100%; max-height: 400px; border-radius: 8px; margin: 1rem 0; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; }
+        .submit-btn { width: 100%; padding: 1rem; background-color: #ff0000; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer; }
+        .submit-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .progress-bar { margin-top: 1rem; height: 30px; background-color: #f0f0f0; border-radius: 15px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; background-color: #ff0000; width: 0%; transition: width 0.3s; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #333; font-weight: 600; }
+        .user-info { display: flex; align-items: center; gap: 10px; }
+        .user-avatar { width: 32px; height: 32px; border-radius: 50%; background-color: #ff0000; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+        #logoutBtn { padding: 0.5rem 1rem; background-color: #f0f0f0; border: none; border-radius: 20px; cursor: pointer; }
+        #logoutBtn:hover { background-color: #ff0000; color: white; }
+        .notification { position: fixed; top: 20px; right: 20px; padding: 15px 20px; color: white; border-radius: 8px; z-index: 9999; animation: slideIn 0.3s ease; }
+        .notification.success { background-color: #4caf50; }
+        .notification.error { background-color: #ff4444; }
+        .notification.info { background-color: #2196f3; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+        .loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .format-info { margin-top: 10px; color: #666; font-size: 12px; }
+        .file-size-warning { color: #ff4444; font-size: 12px; margin-top: 5px; }
+        .chunk-info { margin-top: 10px; color: #4caf50; font-size: 12px; }
     </style>
     
-    <!-- Конфигурация Supabase -->
     <script>
-        // Конфигурация Supabase с вашими данными
+        // Конфигурация Supabase
         const SUPABASE_CONFIG = {
             url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
             anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
         };
 
-        // Проверяем, загружен ли Supabase SDK
         if (typeof supabase === 'undefined') {
             console.error('❌ Supabase SDK не загружен!');
             throw new Error('Supabase SDK не загружен');
         }
 
-        // Инициализация Supabase клиента с увеличенными таймаутами
-        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
-            auth: {
-                autoRefreshToken: true,
-                persistSession: true
-            },
-            global: {
-                headers: { 'X-Client-Info': 'freetube' },
-                fetch: (url, options) => {
-                    // Увеличиваем таймаут до 10 минут
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 минут
-                    
-                    return fetch(url, {
-                        ...options,
-                        signal: controller.signal
-                    }).finally(() => clearTimeout(timeoutId));
-                }
-            }
-        });
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
 
         // Вспомогательные функции
         const supabaseHelpers = {
-            // Получение всех видео
-            async getVideos(filter = 'all', limit = 50) {
+            // Создание записи о видео
+            async createVideo(videoData) {
                 try {
-                    let query = supabaseClient
-                        .from('videos')
-                        .select('*');
-                    
-                    switch(filter) {
-                        case 'latest':
-                            query = query.order('created_at', { ascending: false });
-                            break;
-                        case 'popular':
-                            query = query.order('views', { ascending: false });
-                            break;
-                        default:
-                            query = query.order('created_at', { ascending: false });
-                    }
-                    
-                    const { data, error } = await query.limit(limit);
-                    
-                    if (error) throw error;
-                    return { data, error: null };
-                } catch (error) {
-                    console.error('Ошибка получения видео:', error);
-                    return { data: null, error };
-                }
-            },
-
-            // Получение видео по ID
-            async getVideoById(videoId) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('videos')
-                        .select('*')
-                        .eq('id', videoId)
-                        .single();
-                    
-                    if (error) throw error;
-                    return { data, error: null };
-                } catch (error) {
-                    console.error('Ошибка получения видео:', error);
-                    return { data: null, error };
-                }
-            },
-
-            // Добавление видео - прямой INSERT без RPC
-            async insertVideo(videoData) {
-                try {
-                    console.log('Прямая вставка видео в таблицу...');
                     const { data, error } = await supabaseClient
                         .from('videos')
                         .insert([{
                             title: videoData.title,
                             description: videoData.description,
-                            video_data: videoData.video_data,
-                            thumbnail: videoData.thumbnail,
                             duration: videoData.duration,
-                            views: 0,
                             channel_name: videoData.channel_name,
-                            user_id: videoData.user_id
+                            user_id: videoData.user_id,
+                            thumbnail: videoData.thumbnail,
+                            total_chunks: videoData.total_chunks,
+                            status: 'uploading'
                         }])
                         .select();
                     
                     if (error) throw error;
-                    console.log('✅ Видео успешно вставлено!');
                     return { data, error: null };
                 } catch (error) {
-                    console.error('❌ Ошибка вставки видео:', error);
+                    console.error('Ошибка создания видео:', error);
                     return { data: null, error };
                 }
             },
 
-            // Увеличение просмотров
-            async incrementViews(videoId) {
+            // Сохранение чанка
+            async saveChunk(videoId, chunkIndex, chunkData) {
                 try {
-                    const { error } = await supabaseClient.rpc('increment_views', { 
-                        video_id: videoId 
-                    });
+                    const { data, error } = await supabaseClient
+                        .from('video_chunks')
+                        .insert([{
+                            video_id: videoId,
+                            chunk_index: chunkIndex,
+                            chunk_data: chunkData
+                        }]);
                     
                     if (error) throw error;
                     return { success: true, error: null };
                 } catch (error) {
-                    console.error('Ошибка обновления просмотров:', error);
+                    console.error('Ошибка сохранения чанка:', error);
                     return { success: false, error };
                 }
             },
 
-            // Поиск видео
-            async searchVideos(searchTerm) {
+            // Завершение загрузки
+            async completeUpload(videoId) {
                 try {
                     const { data, error } = await supabaseClient
                         .from('videos')
-                        .select('*')
-                        .ilike('title', `%${searchTerm}%`)
-                        .order('created_at', { ascending: false });
+                        .update({ status: 'completed' })
+                        .eq('id', videoId);
                     
                     if (error) throw error;
-                    return { data, error: null };
+                    return { success: true, error: null };
                 } catch (error) {
-                    console.error('Ошибка поиска:', error);
-                    return { data: null, error };
-                }
-            },
-
-            // Рекомендации
-            async getRecommendedVideos(currentVideoId, limit = 10) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('videos')
-                        .select('*')
-                        .neq('id', currentVideoId)
-                        .order('views', { ascending: false })
-                        .limit(limit);
-                    
-                    if (error) throw error;
-                    return { data, error: null };
-                } catch (error) {
-                    console.error('Ошибка получения рекомендаций:', error);
-                    return { data: null, error };
+                    console.error('Ошибка завершения загрузки:', error);
+                    return { success: false, error };
                 }
             },
 
@@ -444,19 +120,16 @@
                 return supabaseClient.auth.getUser();
             },
 
-            // Выход
             async signOut() {
                 try {
                     const { error } = await supabaseClient.auth.signOut();
                     if (error) throw error;
                     return { success: true, error: null };
                 } catch (error) {
-                    console.error('Ошибка выхода:', error);
                     return { success: false, error };
                 }
             },
 
-            // Проверка соединения
             async testConnection() {
                 try {
                     const { data, error } = await supabaseClient
@@ -473,11 +146,9 @@
             }
         };
 
-        // Делаем функции доступными глобально
         window.supabaseClient = supabaseClient;
         window.supabaseHelpers = supabaseHelpers;
 
-        // Функция выхода
         window.logout = async function() {
             try {
                 await supabaseHelpers.signOut();
@@ -489,7 +160,6 @@
             }
         };
 
-        // Тестируем соединение
         supabaseHelpers.testConnection();
         console.log('🚀 FreeTube Upload инициализирован');
     </script>
@@ -500,9 +170,7 @@
             <div class="nav-left">
                 <a href="/" class="logo">FreeTube</a>
             </div>
-            <div class="nav-right" id="navRight">
-                <!-- Динамически заполняется через JavaScript -->
-            </div>
+            <div class="nav-right" id="navRight"></div>
         </nav>
     </header>
 
@@ -510,7 +178,7 @@
         <h1>Загрузить видео</h1>
         
         <div class="quality-info">
-            <strong>⚠️ Важно:</strong> Максимальный размер видео: <strong>100 МБ</strong> (разбивается на чанки)
+            <strong>📦 Новая система:</strong> Видео разбивается на чанки и загружается по частям
         </div>
         
         <div class="upload-area" id="uploadArea">
@@ -518,7 +186,7 @@
             <div class="upload-content">
                 <div class="upload-icon">📹</div>
                 <p>Нажмите для выбора видео или перетащите файл сюда</p>
-                <small>Максимальный размер: 100 МБ</small>
+                <small>Максимальный размер: 200 МБ</small>
                 <div class="format-info">
                     <i>Поддерживаемые форматы: MP4, WebM, OGG, MOV</i>
                 </div>
@@ -529,6 +197,7 @@
         <div class="video-preview" id="videoPreview" style="display: none;">
             <video controls></video>
             <div class="file-size-warning" id="previewSizeWarning"></div>
+            <div class="chunk-info" id="chunkInfo"></div>
         </div>
 
         <form id="uploadForm" style="display: none;">
@@ -542,17 +211,8 @@
                 <textarea id="description" rows="4" maxlength="5000" placeholder="Введите описание видео"></textarea>
             </div>
 
-            <div class="form-group">
-                <label for="quality">Качество видео</label>
-                <select id="quality">
-                    <option value="high">HD (рекомендуется)</option>
-                    <option value="medium">Среднее</option>
-                    <option value="low">Низкое</option>
-                </select>
-            </div>
-
             <button type="submit" class="submit-btn" id="uploadBtn">
-                <span class="btn-text">Опубликовать видео</span>
+                <span class="btn-text">Начать загрузку</span>
                 <span class="loading-spinner" style="display: none;"></span>
             </button>
         </form>
@@ -563,11 +223,9 @@
         </div>
     </main>
 
-    <!-- Подключаем upload.js -->
-    <script src="js/upload.js"></script>
+    <script src="js/upload-chunks.js"></script>
     
     <script>
-        // Обновляем навигацию при загрузке страницы
         document.addEventListener('DOMContentLoaded', async function() {
             const navRight = document.getElementById('navRight');
             
@@ -575,7 +233,6 @@
                 const { data: { user } } = await supabaseHelpers.getCurrentUser();
                 
                 if (user) {
-                    // Пользователь авторизован
                     const email = user.email || 'User';
                     const initial = email.charAt(0).toUpperCase();
                     
@@ -587,7 +244,6 @@
                         </div>
                     `;
                 } else {
-                    // Пользователь не авторизован - перенаправляем на login
                     window.location.href = 'login.html';
                 }
             } catch (error) {
