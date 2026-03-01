@@ -4,9 +4,6 @@
 let selectedFile = null;
 let videoDuration = 0;
 
-// Размер чанка для разбивки видео (1 МБ)
-const CHUNK_SIZE = 1024 * 1024;
-
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Страница загрузки инициализирована');
@@ -27,6 +24,7 @@ function initializeEventListeners() {
     const uploadArea = document.getElementById('uploadArea');
     const videoInput = document.getElementById('videoInput');
     const uploadForm = document.getElementById('uploadForm');
+    const qualitySelect = document.getElementById('quality');
     
     if (uploadArea) {
         uploadArea.addEventListener('click', () => {
@@ -70,6 +68,12 @@ function initializeEventListeners() {
             await uploadVideo();
         });
     }
+
+    if (qualitySelect) {
+        qualitySelect.addEventListener('change', function(e) {
+            console.log('Выбрано качество:', e.target.value);
+        });
+    }
 }
 
 // Обработка выбранного видео
@@ -91,6 +95,11 @@ async function handleVideoSelect(file) {
     
     selectedFile = file;
     
+    // Показываем предупреждение о размере в Base64
+    const estimatedSize = (file.size / 1024 / 1024 * 1.37).toFixed(2);
+    document.getElementById('previewSizeWarning').textContent = 
+        `⚠️ В Base64 размер будет примерно ${estimatedSize} МБ`;
+    
     // Показываем превью
     const videoPreview = document.getElementById('videoPreview');
     const videoElement = videoPreview.querySelector('video');
@@ -111,7 +120,7 @@ async function handleVideoSelect(file) {
     };
 }
 
-// Конвертация видео в Base64 с разбивкой на чанки
+// Конвертация видео в Base64 с оптимизацией
 async function convertVideoToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -121,8 +130,8 @@ async function convertVideoToBase64(file) {
                 // Получаем Base64 без префикса
                 let base64 = e.target.result.split(',')[1];
                 
-                // Сжимаем если нужно (опционально)
-                // Здесь можно добавить сжатие
+                // Можно добавить сжатие если нужно
+                // Здесь можно использовать pako или другие библиотеки сжатия
                 
                 resolve(base64);
             } catch (error) {
@@ -147,15 +156,15 @@ async function generateThumbnail(videoFile) {
                 try {
                     const canvas = document.createElement('canvas');
                     // Уменьшаем размер превью для экономии места
-                    const maxWidth = 640;
+                    const maxWidth = 320; // Еще больше уменьшаем
                     const scale = Math.min(maxWidth / video.videoWidth, 1);
                     canvas.width = video.videoWidth * scale;
                     canvas.height = video.videoHeight * scale;
                     
                     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    // Конвертируем в Base64 (сжимаем до 70% качества)
-                    const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+                    // Конвертируем в Base64 (сжимаем до 60% качества)
+                    const thumbnail = canvas.toDataURL('image/jpeg', 0.6);
                     
                     // Очищаем
                     URL.revokeObjectURL(video.src);
@@ -253,14 +262,13 @@ async function uploadVideo() {
         const videoBase64 = await convertVideoToBase64(selectedFile);
         
         // Шаг 3: Подготовка данных
-        progressFill.style.width = '60%';
-        progressText.textContent = '60% - Подготовка данных...';
+        progressFill.style.width = '50%';
+        progressText.textContent = '50% - Подготовка данных...';
         
-        // Небольшая задержка для анимации
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        progressFill.style.width = '80%';
-        progressText.textContent = '80% - Сохранение в базу данных...';
+        progressFill.style.width = '70%';
+        progressText.textContent = '70% - Сохранение в базу данных...';
         
         // Шаг 4: Сохраняем в Supabase
         const videoData = {
@@ -275,19 +283,10 @@ async function uploadVideo() {
         };
         
         console.log('Отправка данных в Supabase...');
-        console.log('Размер видео в Base64:', Math.floor(videoBase64.length / 1024 / 1024), 'MB');
+        console.log('Размер видео в Base64:', Math.floor(videoBase64.length / 1024 / 1024), 'МБ');
         
         // Используем функцию с увеличенным таймаутом
-        const { data, error } = await supabaseClient
-            .rpc('insert_video', {
-                p_title: videoData.title,
-                p_description: videoData.description,
-                p_video_data: videoData.video_data,
-                p_thumbnail: videoData.thumbnail,
-                p_duration: videoData.duration,
-                p_channel_name: videoData.channel_name,
-                p_user_id: videoData.user_id
-            });
+        const { data, error } = await supabaseHelpers.insertVideo(videoData);
         
         if (error) throw error;
         
@@ -317,7 +316,7 @@ async function uploadVideo() {
 window.addEventListener('error', function(e) {
     console.error('Глобальная ошибка:', e.error);
     if (e.error && e.error.message && !e.error.message.includes('ResizeObserver')) {
-        alert('Произошла ошибка: ' + e.error.message);
+        console.log('Ошибка (игнорируем):', e.error.message);
     }
 });
 
