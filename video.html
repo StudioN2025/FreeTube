@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Просмотр видео - FreeTube</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- HLS.js для потокового видео -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
     <style>
-        /* Дополнительные стили для страницы видео */
+        /* Стили для страницы видео */
         .video-page {
             display: grid;
             grid-template-columns: 1fr 350px;
@@ -19,18 +22,11 @@
             min-height: calc(100vh - 80px);
         }
 
-        .video-container {
-            display: flex;
-            flex-direction: column;
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
         .video-wrapper {
             position: relative;
             background: #000;
+            border-radius: 8px;
+            overflow: hidden;
         }
 
         .video-wrapper video {
@@ -39,8 +35,51 @@
             display: block;
         }
 
+        .video-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .video-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        .chunk-progress {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            z-index: 10;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         .video-info {
             padding: 1.5rem;
+            background: white;
+            border-radius: 8px;
+            margin-top: 1rem;
         }
 
         .video-title {
@@ -48,7 +87,6 @@
             font-weight: 600;
             margin-bottom: 0.75rem;
             color: #333;
-            line-height: 1.4;
         }
 
         .video-meta {
@@ -89,11 +127,6 @@
 
         .action-btn:hover {
             background: #e0e0e0;
-        }
-
-        .action-btn.liked {
-            background: #ff0000;
-            color: white;
         }
 
         .channel-section {
@@ -137,29 +170,6 @@
             margin-bottom: 0.5rem;
         }
 
-        .channel-description {
-            color: #444;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            max-height: 60px;
-            overflow: hidden;
-            transition: max-height 0.3s;
-        }
-
-        .channel-description.expanded {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .show-more-btn {
-            background: none;
-            border: none;
-            color: #ff0000;
-            cursor: pointer;
-            font-size: 0.9rem;
-            padding: 0.25rem 0;
-        }
-
         .subscribe-btn {
             padding: 0.75rem 1.5rem;
             background: #ff0000;
@@ -174,11 +184,6 @@
 
         .subscribe-btn:hover {
             background: #cc0000;
-            transform: scale(1.05);
-        }
-
-        .subscribe-btn.subscribed {
-            background: #4caf50;
         }
 
         .description-box {
@@ -188,147 +193,10 @@
             margin: 1rem 0;
         }
 
-        .description-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.75rem;
-            color: #666;
-            font-size: 0.9rem;
-        }
-
         .description-text {
             white-space: pre-wrap;
             line-height: 1.6;
             color: #444;
-            max-height: 100px;
-            overflow: hidden;
-            transition: max-height 0.3s;
-        }
-
-        .description-text.expanded {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .comments-section {
-            margin-top: 2rem;
-        }
-
-        .comments-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .comments-header h3 {
-            font-size: 1.2rem;
-            color: #333;
-        }
-
-        .comment-count {
-            color: #666;
-            font-size: 0.9rem;
-        }
-
-        .comment-input {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .comment-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #ff0000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            flex-shrink: 0;
-        }
-
-        .comment-input textarea {
-            flex: 1;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            resize: vertical;
-            min-height: 80px;
-            font-family: inherit;
-        }
-
-        .comment-input textarea:focus {
-            outline: none;
-            border-color: #ff0000;
-        }
-
-        .comment-input button {
-            padding: 0.75rem 1.5rem;
-            background: #ff0000;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            align-self: flex-end;
-        }
-
-        .comment-card {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1.5rem;
-            border-bottom: 1px solid #eee;
-        }
-
-        .comment-content {
-            flex: 1;
-        }
-
-        .comment-author {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .comment-author strong {
-            color: #333;
-        }
-
-        .comment-date {
-            color: #666;
-            font-size: 0.8rem;
-        }
-
-        .comment-text {
-            line-height: 1.5;
-            color: #444;
-            margin-bottom: 0.5rem;
-        }
-
-        .comment-actions {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .comment-actions button {
-            background: none;
-            border: none;
-            color: #666;
-            cursor: pointer;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
-
-        .comment-actions button:hover {
-            color: #ff0000;
         }
 
         .sidebar {
@@ -368,28 +236,6 @@
             border-radius: 4px;
             flex-shrink: 0;
             overflow: hidden;
-            position: relative;
-        }
-
-        .recommended-thumbnail img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .recommended-duration {
-            position: absolute;
-            bottom: 3px;
-            right: 3px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 2px 4px;
-            border-radius: 3px;
-            font-size: 0.7rem;
-        }
-
-        .recommended-info {
-            flex: 1;
         }
 
         .recommended-info h4 {
@@ -397,127 +243,82 @@
             margin-bottom: 0.25rem;
             line-height: 1.3;
             color: #333;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
         }
 
-        .recommended-channel {
+        .recommended-info p {
             font-size: 0.8rem;
             color: #666;
-            margin-bottom: 0.25rem;
         }
 
-        .recommended-stats {
-            font-size: 0.75rem;
-            color: #999;
-        }
-
-        /* Модальное окно для настроек видео */
-        .modal {
-            display: none;
+        .notification {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            backdrop-filter: blur(5px);
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            color: white;
+            border-radius: 8px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
         }
 
-        .modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .notification.success { background-color: #4caf50; }
+        .notification.error { background-color: #ff4444; }
+        .notification.info { background-color: #2196f3; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
         }
 
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-            animation: slideUp 0.3s ease;
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
         }
 
-        @keyframes slideUp {
-            from {
-                transform: translateY(50px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        .modal-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid #eee;
+        .navbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 1rem 2rem;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .modal-header h2 {
-            font-size: 1.3rem;
-            color: #333;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
+        .logo {
             font-size: 1.5rem;
-            cursor: pointer;
-            color: #666;
+            font-weight: bold;
+            color: #ff0000;
+            text-decoration: none;
         }
 
-        .modal-body {
-            padding: 1.5rem;
-        }
-
-        .video-settings {
-            list-style: none;
-        }
-
-        .video-settings li {
-            margin-bottom: 1rem;
-        }
-
-        .video-settings button {
-            width: 100%;
-            padding: 0.75rem;
-            background: #f0f0f0;
-            border: none;
-            border-radius: 8px;
-            text-align: left;
-            cursor: pointer;
-            transition: background 0.2s;
+        .nav-right {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 1rem;
         }
 
-        .video-settings button:hover {
-            background: #e0e0e0;
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .video-settings button.delete {
-            color: #ff4444;
-        }
-
-        .video-settings button.delete:hover {
-            background: #ffebee;
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
         }
 
         @media (max-width: 768px) {
             .video-page {
                 grid-template-columns: 1fr;
                 padding: 1rem;
-                gap: 1rem;
             }
             
             .sidebar {
@@ -527,47 +328,24 @@
             .video-wrapper video {
                 max-height: 40vh;
             }
-            
-            .channel-section {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .video-meta {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .comment-input {
-                flex-direction: column;
-            }
-            
-            .comment-input button {
-                align-self: stretch;
-            }
         }
     </style>
     
     <!-- Конфигурация Supabase -->
     <script>
-        // Конфигурация Supabase с вашими данными
         const SUPABASE_CONFIG = {
             url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
             anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
         };
 
-        // Проверяем, загружен ли Supabase SDK
         if (typeof supabase === 'undefined') {
             console.error('❌ Supabase SDK не загружен!');
             throw new Error('Supabase SDK не загружен');
         }
 
-        // Инициализация Supabase клиента
         const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
 
-        // Вспомогательные функции
         const supabaseHelpers = {
-            // Получение информации о видео
             async getVideoInfo(videoId) {
                 try {
                     console.log('Загрузка информации о видео:', videoId);
@@ -585,7 +363,6 @@
                 }
             },
 
-            // Получение чанков видео
             async getVideoChunks(videoId, fromIndex, toIndex) {
                 try {
                     const { data, error } = await supabaseClient
@@ -604,7 +381,6 @@
                 }
             },
 
-            // Получение общего количества чанков
             async getTotalChunks(videoId) {
                 try {
                     const { count, error } = await supabaseClient
@@ -620,7 +396,6 @@
                 }
             },
 
-            // Увеличение просмотров
             async incrementViews(videoId) {
                 try {
                     const { error } = await supabaseClient.rpc('increment_views', { 
@@ -635,13 +410,13 @@
                 }
             },
 
-            // Получение рекомендаций
             async getRecommendedVideos(currentVideoId, limit = 10) {
                 try {
                     const { data, error } = await supabaseClient
                         .from('videos')
                         .select('*')
                         .neq('id', currentVideoId)
+                        .eq('status', 'completed')
                         .order('views', { ascending: false })
                         .limit(limit);
                     
@@ -653,41 +428,10 @@
                 }
             },
 
-            // Получение статистики канала
-            async getChannelStats(channelName) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('videos')
-                        .select('*')
-                        .eq('channel_name', channelName);
-                    
-                    if (error) throw error;
-                    
-                    const totalViews = data.reduce((sum, video) => sum + (video.views || 0), 0);
-                    
-                    return {
-                        videoCount: data.length,
-                        totalViews: totalViews,
-                        subscribers: Math.floor(Math.random() * 10000) // Заглушка
-                    };
-                } catch (error) {
-                    console.error('Ошибка получения статистики канала:', error);
-                    return null;
-                }
-            },
-
-            // Получение комментариев (заглушка)
-            async getComments(videoId) {
-                // Здесь будет запрос к таблице комментариев
-                return [];
-            },
-
-            // Получение текущего пользователя
             getCurrentUser() {
                 return supabaseClient.auth.getUser();
             },
 
-            // Проверка соединения
             async testConnection() {
                 try {
                     const { data, error } = await supabaseClient
@@ -704,11 +448,8 @@
             }
         };
 
-        // Делаем функции доступными глобально
         window.supabaseClient = supabaseClient;
         window.supabaseHelpers = supabaseHelpers;
-
-        // Тестируем соединение
         supabaseHelpers.testConnection();
         console.log('🚀 FreeTube Video инициализирован');
     </script>
@@ -719,13 +460,7 @@
             <div class="nav-left">
                 <a href="/" class="logo">FreeTube</a>
             </div>
-            <div class="nav-center">
-                <input type="text" placeholder="Поиск видео..." id="searchInput">
-                <button onclick="searchVideos()">🔍</button>
-            </div>
-            <div class="nav-right" id="navRight">
-                <!-- Динамически заполняется -->
-            </div>
+            <div class="nav-right" id="navRight"></div>
         </nav>
     </header>
 
@@ -748,28 +483,6 @@
                         <span id="viewCount">0 просмотров</span>
                         <span id="uploadDate"></span>
                     </div>
-                    
-                    <div class="video-actions">
-                        <button class="action-btn" id="likeBtn">
-                            <span>👍</span>
-                            <span id="likeCount">0</span>
-                        </button>
-                        <button class="action-btn" id="dislikeBtn">
-                            <span>👎</span>
-                            <span id="dislikeCount">0</span>
-                        </button>
-                        <button class="action-btn" id="shareBtn">
-                            <span>🔗</span>
-                            <span>Поделиться</span>
-                        </button>
-                        <button class="action-btn" id="saveBtn">
-                            <span>🔖</span>
-                            <span>Сохранить</span>
-                        </button>
-                        <button class="action-btn" id="moreBtn">
-                            <span>⋮</span>
-                        </button>
-                    </div>
                 </div>
 
                 <div class="channel-section">
@@ -777,39 +490,13 @@
                     <div class="channel-info">
                         <div class="channel-name" id="channelName">FreeTube User</div>
                         <div class="channel-meta" id="channelMeta">
-                            <span id="subscribersCount">0 подписчиков</span> • 
-                            <span id="videosCount">0 видео</span>
+                            <span id="subscribersCount">0 подписчиков</span>
                         </div>
-                        <div class="channel-description" id="channelDescription">
-                            Описание канала будет здесь...
-                        </div>
-                        <button class="show-more-btn" id="showMoreChannelDesc" style="display: none;">Показать больше</button>
                     </div>
-                    <button class="subscribe-btn" id="subscribeBtn">Подписаться</button>
                 </div>
 
                 <div class="description-box">
-                    <div class="description-header">
-                        <span>Описание видео</span>
-                        <span id="videoViews"></span>
-                    </div>
                     <div class="description-text" id="videoDescription"></div>
-                    <button class="show-more-btn" id="showMoreDesc">Показать больше</button>
-                </div>
-
-                <div class="comments-section">
-                    <div class="comments-header">
-                        <h3>Комментарии</h3>
-                        <span class="comment-count" id="commentCount">0</span>
-                    </div>
-                    
-                    <div class="comment-input">
-                        <div class="comment-avatar" id="commentAvatar">U</div>
-                        <textarea placeholder="Добавьте комментарий..." id="commentText"></textarea>
-                        <button id="sendCommentBtn">Отправить</button>
-                    </div>
-
-                    <div id="commentsList"></div>
                 </div>
             </div>
         </div>
@@ -822,29 +509,9 @@
         </div>
     </main>
 
-    <!-- Модальное окно настроек видео -->
-    <div class="modal" id="videoSettingsModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Настройки видео</h2>
-                <button class="close-btn" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <ul class="video-settings" id="videoSettings">
-                    <li><button>✏️ Редактировать название</button></li>
-                    <li><button>📝 Редактировать описание</button></li>
-                    <li><button>🖼️ Изменить миниатюру</button></li>
-                    <li><button>🔒 Приватность</button></li>
-                    <li><button class="delete">🗑️ Удалить видео</button></li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
     <script src="js/video-stream.js"></script>
     
     <script>
-        // Обновляем навигацию
         document.addEventListener('DOMContentLoaded', async function() {
             const navRight = document.getElementById('navRight');
             
@@ -862,30 +529,12 @@
                         </div>
                     `;
                 } else {
-                    navRight.innerHTML = `<a href="login.html" style="color: #ff0000; text-decoration: none;">Войти</a>`;
+                    navRight.innerHTML = `<a href="login.html" style="color:#ff0000;">Войти</a>`;
                 }
             } catch (error) {
-                console.error('Ошибка проверки авторизации:', error);
-                navRight.innerHTML = `<a href="login.html" style="color: #ff0000; text-decoration: none;">Войти</a>`;
+                console.error('Ошибка:', error);
             }
         });
-
-        // Функции для модального окна
-        function openModal() {
-            document.getElementById('videoSettingsModal').classList.add('active');
-        }
-
-        function closeModal() {
-            document.getElementById('videoSettingsModal').classList.remove('active');
-        }
-
-        // Функция поиска
-        function searchVideos() {
-            const searchTerm = document.getElementById('searchInput').value;
-            if (searchTerm.trim()) {
-                window.location.href = `/?search=${encodeURIComponent(searchTerm)}`;
-            }
-        }
     </script>
 </body>
 </html>
