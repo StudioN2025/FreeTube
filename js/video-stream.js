@@ -6,12 +6,8 @@ const videoId = urlParams.get('id');
 
 // Конфигурация
 const CHUNKS_PER_BATCH = 5; // Сколько чанков загружать за раз
-let mediaSource = null;
-let sourceBuffer = null;
-let videoQueue = [];
-let videoPlayer = document.getElementById('videoPlayer');
-let totalChunks = 0;
 let loadedChunks = 0;
+let totalChunks = 0;
 let videoInfo = null;
 
 // Функция показа уведомлений
@@ -46,85 +42,54 @@ function updateProgress() {
     }
 }
 
-// Инициализация MediaSource
-function initMediaSource() {
-    return new Promise((resolve, reject) => {
-        mediaSource = new MediaSource();
-        videoPlayer.src = URL.createObjectURL(mediaSource);
-        
-        mediaSource.addEventListener('sourceopen', async () => {
-            try {
-                // Определяем MIME тип (можно определить по первому чанку)
-                sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
-                
-                sourceBuffer.addEventListener('updateend', () => {
-                    // Если есть очередь и буфер не занят
-                    if (videoQueue.length > 0 && !sourceBuffer.updating) {
-                        appendNextChunk();
-                    }
-                });
-                
-                resolve();
-            } catch (error) {
-                reject(error);
-            }
-        });
-    });
-}
-
-// Добавление следующего чанка в буфер
-function appendNextChunk() {
-    if (videoQueue.length === 0 || sourceBuffer.updating) return;
-    
-    const chunk = videoQueue.shift();
+// Собираем все чанки в один Blob (более надежный способ)
+async function loadAllChunks() {
     try {
-        // Конвертируем Base64 в ArrayBuffer
-        const binaryString = atob(chunk.chunk_data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
+        const allChunks = [];
+        let startIndex = 0;
         
-        sourceBuffer.appendBuffer(bytes.buffer);
-        
-        loadedChunks++;
-        updateProgress();
-        
-        // Если это первый чанк, убираем индикатор загрузки
-        if (loadedChunks === 1) {
-            document.getElementById('videoLoading').style.display = 'none';
-        }
-        
-        // Загружаем следующую партию чанков если нужно
-        if (videoQueue.length < CHUNKS_PER_BATCH && loadedChunks < totalChunks) {
-            loadNextChunks();
-        }
-    } catch (error) {
-        console.error('Ошибка добавления чанка в буфер:', error);
-    }
-}
-
-// Загрузка следующих чанков
-async function loadNextChunks() {
-    if (!videoInfo) return;
-    
-    const nextChunkIndex = loadedChunks + videoQueue.length;
-    if (nextChunkIndex >= totalChunks) return;
-    
-    const toIndex = Math.min(nextChunkIndex + CHUNKS_PER_BATCH - 1, totalChunks - 1);
-    
-    try {
-        const chunks = await supabaseHelpers.getVideoChunks(videoId, nextChunkIndex, toIndex);
-        if (chunks && chunks.length > 0) {
-            videoQueue.push(...chunks);
+        while (startIndex < totalChunks) {
+            const endIndex = Math.min(startIndex + CHUNKS_PER_BATCH * 5, totalChunks - 1);
+            const chunks = await supabaseHelpers.getVideoChunks(videoId, startIndex, endIndex);
             
-            // Если буфер свободен, начинаем добавлять
-            if (!sourceBuffer.updating) {
-                appendNextChunk();
+            if (chunks && chunks.length > 0) {
+                allChunks.push(...chunks);
+                loadedChunks = allChunks.length;
+                updateProgress();
+                startIndex = loadedChunks;
+            } else {
+                break;
             }
         }
+        
+        // Сортируем чанки по индексу
+        allChunks.sort((a, b) => a.chunk_index - b.chunk_index);
+        
+        // Собираем все данные в один Blob
+        const blobParts = [];
+        
+        for (const chunk of allChunks) {
+            try {
+                // Конвертируем Base64 в Uint8Array
+                const binaryString = atob(chunk.chunk_data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                blobParts.push(bytes);
+            } catch (e) {
+                console.error('Ошибка конвертации чанка:', e);
+            }
+        }
+        
+        // Создаем Blob и URL
+        const blob = new Blob(blobParts, { type: 'video/mp4' });
+        const videoUrl = URL.createObjectURL(blob);
+        
+        return videoUrl;
     } catch (error) {
         console.error('Ошибка загрузки чанков:', error);
+        return null;
     }
 }
 
@@ -142,7 +107,9 @@ async function loadVideo() {
         }
         
         // Показываем индикатор загрузки
-        document.getElementById('videoLoading').style.display = 'flex';
+        const videoLoading = document.getElementById('videoLoading');
+        const loadingText = document.getElementById('loadingText');
+        videoLoading.style.display = 'flex';
         
         // Загружаем информацию о видео
         const { data: info, error } = await supabaseHelpers.getVideoInfo(videoId);
@@ -161,23 +128,25 @@ async function loadVideo() {
             throw new Error('Видео повреждено');
         }
         
-        // Инициализируем MediaSource
-        await initMediaSource();
+        loadingText.textContent = `Загрузка видео (0/${totalChunks})...`;
         
-        // Загружаем первую партию чанков
-        const firstChunks = await supabaseHelpers.getVideoChunks(videoId, 0, CHUNKS_PER_BATCH - 1);
-        if (firstChunks && firstChunks.length > 0) {
-            videoQueue.push(...firstChunks);
+        // Загружаем все чанки
+        const videoUrl = await loadAllChunks();
+        
+        if (videoUrl) {
+            const videoPlayer = document.getElementById('videoPlayer');
+            videoPlayer.src = videoUrl;
             
-            // Ждем готовности sourceBuffer
-            const checkBuffer = () => {
-                if (sourceBuffer && !sourceBuffer.updating) {
-                    appendNextChunk();
-                } else {
-                    setTimeout(checkBuffer, 100);
-                }
-            };
-            checkBuffer();
+            // Убираем индикатор загрузки
+            videoLoading.style.display = 'none';
+            
+            // Очищаем URL после окончания видео
+            videoPlayer.addEventListener('ended', () => {
+                URL.revokeObjectURL(videoUrl);
+            });
+            
+            // Автоматически начинаем воспроизведение
+            videoPlayer.play().catch(e => console.log('Автовоспроизведение заблокировано браузером'));
         }
         
         // Увеличиваем счетчик просмотров
