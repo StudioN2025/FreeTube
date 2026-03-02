@@ -21,6 +21,7 @@
             display: flex;
             gap: 10px;
             margin-bottom: 30px;
+            border-bottom: 1px solid #eee;
         }
         
         .auth-tab {
@@ -30,12 +31,13 @@
             background: none;
             cursor: pointer;
             font-size: 16px;
-            border-bottom: 2px solid transparent;
+            color: #666;
+            transition: all 0.3s;
         }
         
         .auth-tab.active {
-            border-bottom-color: #ff0000;
             color: #ff0000;
+            border-bottom: 2px solid #ff0000;
             font-weight: 600;
         }
         
@@ -54,6 +56,12 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .auth-input:focus {
+            outline: none;
+            border-color: #ff0000;
         }
         
         .auth-button {
@@ -67,6 +75,7 @@
             font-weight: 600;
             cursor: pointer;
             margin-bottom: 10px;
+            transition: background-color 0.3s;
         }
         
         .auth-button:hover {
@@ -85,12 +94,30 @@
             color: #ff4444;
             margin-bottom: 10px;
             font-size: 14px;
+            text-align: center;
         }
         
         .success-message {
             color: #4caf50;
             margin-bottom: 10px;
             font-size: 14px;
+            text-align: center;
+        }
+        
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #ff0000;
+            text-decoration: none;
         }
     </style>
 </head>
@@ -145,16 +172,13 @@
     </main>
 
     <script>
-        // Конфигурация Supabase
         const SUPABASE_CONFIG = {
             url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
             anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
         };
 
-        // Инициализация Supabase
         const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
 
-        // Переключение между вкладками
         function switchTab(tab) {
             const tabs = document.querySelectorAll('.auth-tab');
             const forms = document.querySelectorAll('.auth-form');
@@ -170,25 +194,21 @@
                 document.getElementById('registerForm').classList.add('active');
             }
             
-            // Очищаем сообщения
             document.getElementById('loginError').textContent = '';
             document.getElementById('loginSuccess').textContent = '';
             document.getElementById('registerError').textContent = '';
             document.getElementById('registerSuccess').textContent = '';
         }
 
-        // Функция входа
         async function login() {
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
             const errorDiv = document.getElementById('loginError');
             const successDiv = document.getElementById('loginSuccess');
             
-            // Очищаем предыдущие сообщения
             errorDiv.textContent = '';
             successDiv.textContent = '';
             
-            // Валидация
             if (!email || !password) {
                 errorDiv.textContent = 'Заполните все поля';
                 return;
@@ -203,8 +223,6 @@
                 if (error) throw error;
                 
                 successDiv.textContent = 'Успешный вход! Перенаправление...';
-                
-                // Сохраняем информацию о пользователе
                 localStorage.setItem('user', JSON.stringify(data.user));
                 
                 setTimeout(() => {
@@ -216,7 +234,6 @@
             }
         }
 
-        // Функция регистрации
         async function register() {
             const name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
@@ -225,11 +242,9 @@
             const errorDiv = document.getElementById('registerError');
             const successDiv = document.getElementById('registerSuccess');
             
-            // Очищаем предыдущие сообщения
             errorDiv.textContent = '';
             successDiv.textContent = '';
             
-            // Валидация
             if (!name || !email || !password || !confirmPassword) {
                 errorDiv.textContent = 'Заполните все поля';
                 return;
@@ -260,7 +275,6 @@
                 
                 successDiv.textContent = 'Регистрация успешна! Выполняется вход...';
                 
-                // Сразу выполняем вход после регистрации
                 const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({
                     email: email,
                     password: password
@@ -268,7 +282,6 @@
                 
                 if (loginError) throw loginError;
                 
-                // Сохраняем информацию о пользователе
                 localStorage.setItem('user', JSON.stringify(loginData.user));
                 
                 setTimeout(() => {
@@ -280,17 +293,13 @@
             }
         }
 
-        // Проверяем, есть ли уже активная сессия
         async function checkSession() {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            
             if (session) {
-                // Если пользователь уже вошел, перенаправляем на upload.html
                 window.location.href = 'upload.html';
             }
         }
 
-        // Вызываем проверку при загрузке страницы
         checkSession();
     </script>
 </body>
