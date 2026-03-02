@@ -9,6 +9,8 @@ let loadedChunks = 0;
 let totalChunks = 0;
 let videoInfo = null;
 let videoPlayer = document.getElementById('videoPlayer');
+let isLoading = false;
+let chunks = [];
 
 // Функция показа уведомлений
 function showNotification(message, type = 'info') {
@@ -26,7 +28,7 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Обновление прогресса загрузки
+// Обновление прогресса
 function updateProgress() {
     const chunkProgress = document.getElementById('chunkProgress');
     const loadingText = document.getElementById('loadingText');
@@ -37,7 +39,7 @@ function updateProgress() {
         chunkProgress.style.display = 'block';
         
         if (loadingText) {
-            loadingText.textContent = `Загрузка видео... ${loadedChunks}/${totalChunks}`;
+            loadingText.textContent = `Загрузка... ${loadedChunks}/${totalChunks}`;
         }
         
         if (loadedChunks === totalChunks) {
@@ -49,75 +51,74 @@ function updateProgress() {
     }
 }
 
-// Конвертация Base64 в Blob
-function base64ToBlob(base64, mimeType) {
+// Конвертация Base64 в Blob URL
+function createBlobUrlFromChunks(chunksArray) {
     try {
-        const binaryString = atob(base64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+        // Сортируем чанки
+        chunksArray.sort((a, b) => a.chunk_index - b.chunk_index);
+        
+        // Собираем все бинарные данные
+        const binaryData = [];
+        for (const chunk of chunksArray) {
+            const binaryString = atob(chunk.chunk_data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            binaryData.push(bytes);
         }
-        return new Blob([bytes], { type: mimeType });
+        
+        // Создаем Blob
+        const blob = new Blob(binaryData, { type: 'video/mp4' });
+        return URL.createObjectURL(blob);
     } catch (error) {
-        console.error('Ошибка конвертации Base64:', error);
+        console.error('Ошибка создания Blob:', error);
         return null;
     }
 }
 
-// Загрузка всех чанков последовательно
-async function loadAllChunks() {
+// Загрузка следующей партии чанков
+async function loadNextBatch() {
+    if (isLoading || loadedChunks >= totalChunks) return;
+    
+    isLoading = true;
+    
     try {
-        const mimeType = 'video/mp4';
-        const chunks = [];
-        let startIndex = 0;
-        const BATCH_SIZE = 10;
+        const startIndex = loadedChunks;
+        const endIndex = Math.min(startIndex + 10, totalChunks - 1);
         
-        while (startIndex < totalChunks) {
-            const endIndex = Math.min(startIndex + BATCH_SIZE - 1, totalChunks - 1);
-            console.log(`Загрузка чанков ${startIndex} - ${endIndex}`);
+        console.log(`📥 Загрузка чанков ${startIndex} - ${endIndex}`);
+        
+        const newChunks = await supabaseHelpers.getVideoChunks(videoId, startIndex, endIndex);
+        
+        if (newChunks && newChunks.length > 0) {
+            chunks.push(...newChunks);
+            loadedChunks = chunks.length;
+            updateProgress();
             
-            const batchChunks = await supabaseHelpers.getVideoChunks(videoId, startIndex, endIndex);
+            // Если это первый чанк, сразу запускаем видео
+            if (loadedChunks >= 3) {
+                const videoUrl = createBlobUrlFromChunks(chunks);
+                if (videoUrl) {
+                    videoPlayer.src = videoUrl;
+                    document.getElementById('videoLoading').style.display = 'none';
+                    videoPlayer.play().catch(e => console.log('Автовоспроизведение заблокировано'));
+                }
+            }
             
-            if (batchChunks && batchChunks.length > 0) {
-                // Сортируем чанки по индексу
-                batchChunks.sort((a, b) => a.chunk_index - b.chunk_index);
-                chunks.push(...batchChunks);
-                
-                loadedChunks = chunks.length;
-                updateProgress();
-                startIndex = loadedChunks;
-            } else {
-                break;
-            }
+            // Загружаем следующую партию
+            setTimeout(() => {
+                isLoading = false;
+                loadNextBatch();
+            }, 500);
         }
-        
-        // Сортируем все чанки
-        chunks.sort((a, b) => a.chunk_index - b.chunk_index);
-        
-        console.log(`Загружено ${chunks.length} чанков, собираем видео...`);
-        
-        // Собираем все чанки в один Blob
-        const blobParts = [];
-        for (const chunk of chunks) {
-            const blob = base64ToBlob(chunk.chunk_data, mimeType);
-            if (blob) {
-                blobParts.push(blob);
-            }
-        }
-        
-        // Создаем итоговый Blob
-        const finalBlob = new Blob(blobParts, { type: mimeType });
-        console.log(`Итоговый размер: ${(finalBlob.size / 1024 / 1024).toFixed(2)} МБ`);
-        
-        return URL.createObjectURL(finalBlob);
-        
     } catch (error) {
-        console.error('Ошибка загрузки чанков:', error);
-        return null;
+        console.error('Ошибка загрузки партии:', error);
+        isLoading = false;
     }
 }
 
-// Основная функция загрузки видео
+// Основная функция
 async function loadVideo() {
     if (!videoId) {
         window.location.href = '/';
@@ -125,76 +126,32 @@ async function loadVideo() {
     }
     
     try {
-        // Проверяем наличие supabaseHelpers
-        if (typeof supabaseHelpers === 'undefined') {
-            throw new Error('supabaseHelpers не загружен');
-        }
-        
-        // Показываем индикатор загрузки
         document.getElementById('videoLoading').style.display = 'flex';
         
-        // Загружаем информацию о видео
+        // Загружаем инфо о видео
         const { data: info, error } = await supabaseHelpers.getVideoInfo(videoId);
         if (error) throw error;
         if (!info) throw new Error('Видео не найдено');
         
         videoInfo = info;
-        
-        // Отображаем информацию о видео
         displayVideoInfo(info);
         
         // Получаем общее количество чанков
         totalChunks = info.total_chunks || await supabaseHelpers.getTotalChunks(videoId);
-        
-        if (totalChunks === 0) {
-            throw new Error('Видео повреждено');
-        }
-        
         console.log(`📊 Всего чанков: ${totalChunks}`);
         
-        // Загружаем все чанки
-        const videoUrl = await loadAllChunks();
+        // Начинаем загрузку чанков
+        await loadNextBatch();
         
-        if (videoUrl) {
-            // Устанавливаем видео
-            videoPlayer.src = videoUrl;
-            
-            // Убираем индикатор загрузки
-            document.getElementById('videoLoading').style.display = 'none';
-            
-            // Пытаемся воспроизвести
-            videoPlayer.play().catch(e => {
-                console.log('Автовоспроизведение заблокировано браузером');
-            });
-            
-            // Очищаем URL после окончания
-            videoPlayer.addEventListener('ended', () => {
-                URL.revokeObjectURL(videoUrl);
-            });
-            
-            // Добавляем обработчик ошибок
-            videoPlayer.addEventListener('error', (e) => {
-                console.error('Ошибка видео:', videoPlayer.error);
-                showNotification('Ошибка воспроизведения видео', 'error');
-            });
-        }
-        
-        // Увеличиваем счетчик просмотров
+        // Увеличиваем просмотры
         await supabaseHelpers.incrementViews(videoId);
         
         // Загружаем рекомендации
         loadRecommendedVideos(videoId);
         
     } catch (error) {
-        console.error('Ошибка загрузки видео:', error);
-        showNotification('Видео не найдено', 'error');
-        
-        document.querySelector('.video-container').innerHTML = `
-            <div class="error-message">
-                <p>❌ Ошибка загрузки видео: ${error.message}</p>
-                <button onclick="window.location.href='/'">Вернуться на главную</button>
-            </div>
-        `;
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки видео', 'error');
     }
 }
 
@@ -205,27 +162,19 @@ function displayVideoInfo(video) {
     document.getElementById('videoTitle').textContent = video.title || 'Без названия';
     document.getElementById('videoDescription').textContent = video.description || 'Нет описания';
     
-    // Название канала
     const channelName = video.channel_name || 'FreeTube User';
     document.getElementById('channelName').textContent = channelName;
     
-    // Аватар канала
     const channelAvatar = document.getElementById('channelAvatar');
     if (channelAvatar) {
         channelAvatar.textContent = channelName.charAt(0).toUpperCase();
     }
     
-    // Просмотры
     const viewCount = document.getElementById('viewCount');
     viewCount.textContent = formatViews(video.views || 0) + ' просмотров';
     
-    // Дата загрузки
     const uploadDate = document.getElementById('uploadDate');
-    if (video.created_at) {
-        uploadDate.textContent = timeAgo(video.created_at);
-    } else {
-        uploadDate.textContent = 'недавно';
-    }
+    uploadDate.textContent = timeAgo(video.created_at);
 }
 
 // Загрузка рекомендаций
@@ -281,85 +230,54 @@ function timeAgo(date) {
         const past = new Date(date);
         const seconds = Math.floor((now - past) / 1000);
         
-        if (seconds < 0) return 'только что';
         if (seconds < 60) return 'только что';
         
         const minutes = Math.floor(seconds / 60);
         if (minutes < 60) {
-            return minutes + ' ' + getMinutesWord(minutes) + ' назад';
+            return minutes + ' ' + getWord(minutes, 'минуту', 'минуты', 'минут') + ' назад';
         }
         
         const hours = Math.floor(minutes / 60);
         if (hours < 24) {
-            return hours + ' ' + getHoursWord(hours) + ' назад';
+            return hours + ' ' + getWord(hours, 'час', 'часа', 'часов') + ' назад';
         }
         
         const days = Math.floor(hours / 24);
         if (days < 7) {
-            return days + ' ' + getDaysWord(days) + ' назад';
+            return days + ' ' + getWord(days, 'день', 'дня', 'дней') + ' назад';
         }
         
-        if (days < 30) {
-            const weeks = Math.floor(days / 7);
-            return weeks + ' ' + getWeeksWord(weeks) + ' назад';
+        const weeks = Math.floor(days / 7);
+        if (weeks < 5) {
+            return weeks + ' ' + getWord(weeks, 'неделю', 'недели', 'недель') + ' назад';
         }
         
-        if (days < 365) {
-            const months = Math.floor(days / 30);
-            return months + ' ' + getMonthsWord(months) + ' назад';
+        const months = Math.floor(days / 30);
+        if (months < 12) {
+            return months + ' ' + getWord(months, 'месяц', 'месяца', 'месяцев') + ' назад';
         }
         
         const years = Math.floor(days / 365);
-        return years + ' ' + getYearsWord(years) + ' назад';
+        return years + ' ' + getWord(years, 'год', 'года', 'лет') + ' назад';
         
     } catch (error) {
-        console.error('Ошибка форматирования даты:', error);
         return 'недавно';
     }
 }
 
-// Вспомогательные функции для склонения
-function getMinutesWord(minutes) {
-    if (minutes % 10 === 1 && minutes % 100 !== 11) return 'минуту';
-    if ([2,3,4].includes(minutes % 10) && ![12,13,14].includes(minutes % 100)) return 'минуты';
-    return 'минут';
-}
-
-function getHoursWord(hours) {
-    if (hours % 10 === 1 && hours % 100 !== 11) return 'час';
-    if ([2,3,4].includes(hours % 10) && ![12,13,14].includes(hours % 100)) return 'часа';
-    return 'часов';
-}
-
-function getDaysWord(days) {
-    if (days % 10 === 1 && days % 100 !== 11) return 'день';
-    if ([2,3,4].includes(days % 10) && ![12,13,14].includes(days % 100)) return 'дня';
-    return 'дней';
-}
-
-function getWeeksWord(weeks) {
-    if (weeks % 10 === 1 && weeks % 100 !== 11) return 'неделю';
-    if ([2,3,4].includes(weeks % 10) && ![12,13,14].includes(weeks % 100)) return 'недели';
-    return 'недель';
-}
-
-function getMonthsWord(months) {
-    if (months % 10 === 1 && months % 100 !== 11) return 'месяц';
-    if ([2,3,4].includes(months % 10) && ![12,13,14].includes(months % 100)) return 'месяца';
-    return 'месяцев';
-}
-
-function getYearsWord(years) {
-    if (years % 10 === 1 && years % 100 !== 11) return 'год';
-    if ([2,3,4].includes(years % 10) && ![12,13,14].includes(years % 100)) return 'года';
-    return 'лет';
+function getWord(number, form1, form2, form5) {
+    number = Math.abs(number) % 100;
+    if (number > 10 && number < 15) return form5;
+    number = number % 10;
+    if (number === 1) return form1;
+    if (number > 1 && number < 5) return form2;
+    return form5;
 }
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Страница видео загружена');
     
-    // Проверяем наличие supabaseHelpers
     if (typeof supabaseHelpers !== 'undefined') {
         console.log('✅ supabaseHelpers загружен');
         loadVideo();
