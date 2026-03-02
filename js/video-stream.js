@@ -5,13 +5,8 @@ const urlParams = new URLSearchParams(window.location.search);
 const videoId = urlParams.get('id');
 
 // Конфигурация
-let loadedChunks = 0;
-let totalChunks = 0;
 let videoInfo = null;
 let videoPlayer = document.getElementById('videoPlayer');
-let isLoading = false;
-let chunks = [];
-let isVideoReady = false;
 
 // Функция показа уведомлений
 function showNotification(message, type = 'info') {
@@ -29,60 +24,10 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Обновление прогресса
-function updateProgress() {
-    const chunkProgress = document.getElementById('chunkProgress');
-    const loadingText = document.getElementById('loadingText');
-    
-    if (totalChunks > 0) {
-        const percent = Math.floor((loadedChunks / totalChunks) * 100);
-        chunkProgress.textContent = `📦 Загружено: ${loadedChunks}/${totalChunks} (${percent}%)`;
-        chunkProgress.style.display = 'block';
-        
-        if (loadingText) {
-            loadingText.textContent = `Загрузка... ${loadedChunks}/${totalChunks}`;
-        }
-        
-        if (loadedChunks === totalChunks) {
-            chunkProgress.style.background = '#4caf50';
-            setTimeout(() => {
-                chunkProgress.style.display = 'none';
-            }, 3000);
-        }
-    }
-}
-
-// Конвертация Base64 в Blob URL
-function createBlobUrlFromChunks(chunksArray) {
-    try {
-        // Сортируем чанки
-        chunksArray.sort((a, b) => a.chunk_index - b.chunk_index);
-        
-        // Собираем все бинарные данные
-        const binaryData = [];
-        for (const chunk of chunksArray) {
-            const binaryString = atob(chunk.chunk_data);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            binaryData.push(bytes);
-        }
-        
-        // Создаем Blob
-        const blob = new Blob(binaryData, { type: 'video/mp4' });
-        return URL.createObjectURL(blob);
-    } catch (error) {
-        console.error('Ошибка создания Blob:', error);
-        return null;
-    }
-}
-
 // Показать кнопку воспроизведения
 function showPlayButton() {
     const videoContainer = document.querySelector('.video-container');
     
-    // Создаем кнопку если её нет
     if (!document.getElementById('playButton')) {
         const playButton = document.createElement('button');
         playButton.id = 'playButton';
@@ -102,16 +47,7 @@ function showPlayButton() {
             cursor: pointer;
             z-index: 20;
             box-shadow: 0 4px 15px rgba(255,0,0,0.3);
-            transition: transform 0.2s;
         `;
-        
-        playButton.addEventListener('mouseover', () => {
-            playButton.style.transform = 'translate(-50%, -50%) scale(1.05)';
-        });
-        
-        playButton.addEventListener('mouseout', () => {
-            playButton.style.transform = 'translate(-50%, -50%) scale(1)';
-        });
         
         playButton.addEventListener('click', () => {
             videoPlayer.play();
@@ -123,67 +59,7 @@ function showPlayButton() {
     }
 }
 
-// Загрузка следующей партии чанков
-async function loadNextBatch() {
-    if (isLoading || loadedChunks >= totalChunks) return;
-    
-    isLoading = true;
-    
-    try {
-        const startIndex = loadedChunks;
-        const endIndex = Math.min(startIndex + 10, totalChunks - 1);
-        
-        console.log(`📥 Загрузка чанков ${startIndex} - ${endIndex}`);
-        
-        const newChunks = await supabaseHelpers.getVideoChunks(videoId, startIndex, endIndex);
-        
-        if (newChunks && newChunks.length > 0) {
-            chunks.push(...newChunks);
-            loadedChunks = chunks.length;
-            updateProgress();
-            
-            // Если загрузили достаточно для старта (первые 3 чанка)
-            if (loadedChunks >= 3 && !isVideoReady) {
-                isVideoReady = true;
-                const videoUrl = createBlobUrlFromChunks(chunks);
-                
-                if (videoUrl) {
-                    videoPlayer.src = videoUrl;
-                    document.getElementById('videoLoading').style.display = 'none';
-                    
-                    // Добавляем обработчик клика для воспроизведения
-                    videoPlayer.addEventListener('click', () => {
-                        videoPlayer.play();
-                    });
-                    
-                    // Показываем кнопку воспроизведения
-                    showPlayButton();
-                    
-                    // Пытаемся воспроизвести без звука (иногда работает)
-                    videoPlayer.muted = true;
-                    videoPlayer.play().then(() => {
-                        // Если получилось, убираем кнопку
-                        document.getElementById('playButton')?.remove();
-                    }).catch(() => {
-                        // Если не получилось, оставляем кнопку
-                        videoPlayer.muted = false;
-                    });
-                }
-            }
-            
-            // Загружаем следующую партию
-            setTimeout(() => {
-                isLoading = false;
-                loadNextBatch();
-            }, 500);
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки партии:', error);
-        isLoading = false;
-    }
-}
-
-// Основная функция
+// Загружаем все чанки и собираем видео
 async function loadVideo() {
     if (!videoId) {
         window.location.href = '/';
@@ -191,9 +67,15 @@ async function loadVideo() {
     }
     
     try {
+        // Проверяем наличие supabaseHelpers
+        if (typeof supabaseHelpers === 'undefined') {
+            throw new Error('supabaseHelpers не загружен');
+        }
+        
+        // Показываем индикатор загрузки
         document.getElementById('videoLoading').style.display = 'flex';
         
-        // Загружаем инфо о видео
+        // Загружаем информацию о видео
         const { data: info, error } = await supabaseHelpers.getVideoInfo(videoId);
         if (error) throw error;
         if (!info) throw new Error('Видео не найдено');
@@ -202,11 +84,71 @@ async function loadVideo() {
         displayVideoInfo(info);
         
         // Получаем общее количество чанков
-        totalChunks = info.total_chunks || await supabaseHelpers.getTotalChunks(videoId);
+        const totalChunks = info.total_chunks || await supabaseHelpers.getTotalChunks(videoId);
         console.log(`📊 Всего чанков: ${totalChunks}`);
         
-        // Начинаем загрузку чанков
-        await loadNextBatch();
+        if (totalChunks === 0) {
+            throw new Error('Видео повреждено');
+        }
+        
+        // Загружаем все чанки
+        console.log('📥 Загрузка всех чанков...');
+        const allChunks = [];
+        
+        for (let i = 0; i < totalChunks; i += 20) {
+            const end = Math.min(i + 19, totalChunks - 1);
+            console.log(`Загрузка чанков ${i} - ${end}`);
+            
+            const chunks = await supabaseHelpers.getVideoChunks(videoId, i, end);
+            if (chunks && chunks.length > 0) {
+                allChunks.push(...chunks);
+            }
+            
+            // Обновляем прогресс
+            const percent = Math.floor((allChunks.length / totalChunks) * 100);
+            document.getElementById('loadingText').textContent = `Загрузка... ${allChunks.length}/${totalChunks} (${percent}%)`;
+        }
+        
+        // Сортируем чанки
+        allChunks.sort((a, b) => a.chunk_index - b.chunk_index);
+        console.log(`✅ Загружено ${allChunks.length} чанков`);
+        
+        // Собираем видео
+        console.log('🔨 Сборка видео...');
+        const binaryData = [];
+        
+        for (const chunk of allChunks) {
+            try {
+                const binaryString = atob(chunk.chunk_data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let j = 0; j < binaryString.length; j++) {
+                    bytes[j] = binaryString.charCodeAt(j);
+                }
+                binaryData.push(bytes);
+            } catch (e) {
+                console.error('Ошибка обработки чанка:', e);
+            }
+        }
+        
+        // Создаем Blob и URL
+        const blob = new Blob(binaryData, { type: 'video/mp4' });
+        const videoUrl = URL.createObjectURL(blob);
+        
+        console.log(`✅ Видео собрано, размер: ${(blob.size / 1024 / 1024).toFixed(2)} МБ`);
+        
+        // Устанавливаем видео
+        videoPlayer.src = videoUrl;
+        
+        // Убираем индикатор загрузки
+        document.getElementById('videoLoading').style.display = 'none';
+        
+        // Показываем кнопку воспроизведения
+        showPlayButton();
+        
+        // Очищаем URL после использования
+        videoPlayer.addEventListener('ended', () => {
+            URL.revokeObjectURL(videoUrl);
+        });
         
         // Увеличиваем просмотры
         await supabaseHelpers.incrementViews(videoId);
@@ -216,7 +158,14 @@ async function loadVideo() {
         
     } catch (error) {
         console.error('Ошибка:', error);
-        showNotification('Ошибка загрузки видео', 'error');
+        showNotification('Ошибка загрузки видео: ' + error.message, 'error');
+        
+        document.querySelector('.video-container').innerHTML = `
+            <div class="error-message">
+                <p>❌ Ошибка загрузки видео: ${error.message}</p>
+                <button onclick="window.location.href='/'">Вернуться на главную</button>
+            </div>
+        `;
     }
 }
 
