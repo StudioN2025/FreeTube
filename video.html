@@ -55,11 +55,55 @@
             margin: 0 auto;
         }
 
+        .video-container {
+            position: relative;
+        }
+
         .video-container video {
             width: 100%;
             max-height: 70vh;
             background: #000;
             border-radius: 8px;
+        }
+
+        .video-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .video-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        .chunk-progress {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            z-index: 10;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         .video-info {
@@ -290,10 +334,10 @@
 
         // Вспомогательные функции
         const supabaseHelpers = {
-            // Получение видео по ID
-            async getVideoById(videoId) {
+            // Получение информации о видео без чанков
+            async getVideoInfo(videoId) {
                 try {
-                    console.log('Загрузка видео с ID:', videoId);
+                    console.log('Загрузка информации о видео:', videoId);
                     const { data, error } = await supabaseClient
                         .from('videos')
                         .select('*')
@@ -301,33 +345,22 @@
                         .single();
                     
                     if (error) throw error;
-                    
-                    // Если есть чанки, собираем видео
-                    if (data && data.total_chunks > 0) {
-                        const chunks = await this.getVideoChunks(videoId);
-                        if (chunks && chunks.length > 0) {
-                            // Сортируем чанки по индексу
-                            chunks.sort((a, b) => a.chunk_index - b.chunk_index);
-                            // Собираем все чанки в одну строку
-                            const videoData = chunks.map(c => c.chunk_data).join('');
-                            data.video_data = videoData;
-                        }
-                    }
-                    
                     return { data, error: null };
                 } catch (error) {
-                    console.error('Ошибка получения видео:', error);
+                    console.error('Ошибка получения информации о видео:', error);
                     return { data: null, error };
                 }
             },
 
-            // Получение чанков видео
-            async getVideoChunks(videoId) {
+            // Получение чанков видео с пагинацией
+            async getVideoChunks(videoId, fromIndex, toIndex) {
                 try {
                     const { data, error } = await supabaseClient
                         .from('video_chunks')
                         .select('*')
                         .eq('video_id', videoId)
+                        .gte('chunk_index', fromIndex)
+                        .lte('chunk_index', toIndex)
                         .order('chunk_index', { ascending: true });
                     
                     if (error) throw error;
@@ -335,6 +368,22 @@
                 } catch (error) {
                     console.error('Ошибка получения чанков:', error);
                     return null;
+                }
+            },
+
+            // Получение общего количества чанков
+            async getTotalChunks(videoId) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('video_chunks')
+                        .select('chunk_index', { count: 'exact', head: true })
+                        .eq('video_id', videoId);
+                    
+                    if (error) throw error;
+                    return data.length;
+                } catch (error) {
+                    console.error('Ошибка получения количества чанков:', error);
+                    return 0;
                 }
             },
 
@@ -417,6 +466,11 @@
     <main class="video-page">
         <div class="video-container">
             <video id="videoPlayer" controls></video>
+            <div class="video-loading" id="videoLoading" style="display: none;">
+                <div class="spinner"></div>
+                <span id="loadingText">Загрузка видео...</span>
+            </div>
+            <div class="chunk-progress" id="chunkProgress" style="display: none;"></div>
             
             <div class="video-info">
                 <h1 id="videoTitle">Загрузка...</h1>
@@ -447,7 +501,7 @@
         </div>
     </main>
 
-    <script src="js/video.js"></script>
+    <script src="js/video-stream.js"></script>
     
     <script>
         // Обновляем навигацию
