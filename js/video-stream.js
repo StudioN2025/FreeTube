@@ -5,8 +5,9 @@ const urlParams = new URLSearchParams(window.location.search);
 const videoId = urlParams.get('id');
 
 // Конфигурация
-let videoInfo = null;
+let hls = null;
 let videoPlayer = document.getElementById('videoPlayer');
+let mediaSource = null;
 
 // Функция показа уведомлений
 function showNotification(message, type = 'info') {
@@ -24,9 +25,112 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// Конвертация чанков в HLS формат (на лету)
+async function createHLSPlaylist(chunks) {
+    // Сортируем чанки
+    chunks.sort((a, b) => a.chunk_index - b.chunk_index);
+    
+    // Создаем массив с данными
+    const binaryData = [];
+    let totalSize = 0;
+    
+    for (const chunk of chunks) {
+        try {
+            const binaryString = atob(chunk.chunk_data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let j = 0; j < binaryString.length; j++) {
+                bytes[j] = binaryString.charCodeAt(j);
+            }
+            binaryData.push(bytes);
+            totalSize += bytes.length;
+        } catch (e) {
+            console.error('Ошибка обработки чанка:', e);
+        }
+    }
+    
+    console.log(`📦 Всего данных: ${(totalSize / 1024 / 1024).toFixed(2)} МБ`);
+    
+    // Создаем Blob и URL
+    const blob = new Blob(binaryData, { type: 'video/mp4' });
+    return URL.createObjectURL(blob);
+}
+
+// Загружаем видео с поддержкой HLS
+async function loadVideoWithHLS() {
+    try {
+        // Загружаем информацию о видео
+        const { data: info, error } = await supabaseHelpers.getVideoInfo(videoId);
+        if (error) throw error;
+        
+        // Получаем общее количество чанков
+        const totalChunks = info.total_chunks || await supabaseHelpers.getTotalChunks(videoId);
+        console.log(`📊 Всего чанков: ${totalChunks}`);
+        
+        // Загружаем все чанки
+        const allChunks = [];
+        for (let i = 0; i < totalChunks; i += 20) {
+            const end = Math.min(i + 19, totalChunks - 1);
+            const chunks = await supabaseHelpers.getVideoChunks(videoId, i, end);
+            if (chunks && chunks.length > 0) {
+                allChunks.push(...chunks);
+                
+                // Обновляем прогресс
+                const percent = Math.floor((allChunks.length / totalChunks) * 100);
+                document.getElementById('loadingText').textContent = 
+                    `Загрузка... ${allChunks.length}/${totalChunks} (${percent}%)`;
+            }
+        }
+        
+        // Создаем URL для видео
+        const videoUrl = await createHLSPlaylist(allChunks);
+        
+        // Проверяем поддержку HLS
+        if (Hls.isSupported()) {
+            hls = new Hls({
+                maxBufferSize: 30 * 1000 * 1000, // 30 МБ буфер
+                maxBufferLength: 30, // 30 секунд буфера
+                liveSyncDurationCount: 3,
+                enableWorker: true,
+                debug: false
+            });
+            
+            hls.loadSource(videoUrl);
+            hls.attachMedia(videoPlayer);
+            
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                console.log('✅ HLS манифест загружен');
+                document.getElementById('videoLoading').style.display = 'none';
+                showPlayButton();
+            });
+            
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                console.error('HLS ошибка:', data);
+            });
+        } 
+        // Fallback для браузеров без HLS
+        else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+            videoPlayer.src = videoUrl;
+            videoPlayer.addEventListener('loadedmetadata', () => {
+                document.getElementById('videoLoading').style.display = 'none';
+                showPlayButton();
+            });
+        }
+        
+        // Увеличиваем просмотры
+        await supabaseHelpers.incrementViews(videoId);
+        
+        // Загружаем рекомендации
+        loadRecommendedVideos(videoId);
+        
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка загрузки видео', 'error');
+    }
+}
+
 // Показать кнопку воспроизведения
 function showPlayButton() {
-    const videoContainer = document.querySelector('.video-container');
+    const videoContainer = document.querySelector('.video-wrapper');
     
     if (!document.getElementById('playButton')) {
         const playButton = document.createElement('button');
@@ -47,245 +151,69 @@ function showPlayButton() {
             cursor: pointer;
             z-index: 20;
             box-shadow: 0 4px 15px rgba(255,0,0,0.3);
+            transition: all 0.3s;
         `;
         
-        playButton.addEventListener('click', () => {
+        playButton.onmouseover = () => {
+            playButton.style.transform = 'translate(-50%, -50%) scale(1.05)';
+        };
+        
+        playButton.onmouseout = () => {
+            playButton.style.transform = 'translate(-50%, -50%) scale(1)';
+        };
+        
+        playButton.onclick = () => {
             videoPlayer.play();
             playButton.style.display = 'none';
-        });
+        };
         
         videoContainer.style.position = 'relative';
         videoContainer.appendChild(playButton);
     }
 }
 
-// Загружаем все чанки и собираем видео
-async function loadVideo() {
-    if (!videoId) {
-        window.location.href = '/';
-        return;
-    }
-    
-    try {
-        // Проверяем наличие supabaseHelpers
-        if (typeof supabaseHelpers === 'undefined') {
-            throw new Error('supabaseHelpers не загружен');
-        }
-        
-        // Показываем индикатор загрузки
-        document.getElementById('videoLoading').style.display = 'flex';
-        
-        // Загружаем информацию о видео
-        const { data: info, error } = await supabaseHelpers.getVideoInfo(videoId);
-        if (error) throw error;
-        if (!info) throw new Error('Видео не найдено');
-        
-        videoInfo = info;
-        displayVideoInfo(info);
-        
-        // Получаем общее количество чанков
-        const totalChunks = info.total_chunks || await supabaseHelpers.getTotalChunks(videoId);
-        console.log(`📊 Всего чанков: ${totalChunks}`);
-        
-        if (totalChunks === 0) {
-            throw new Error('Видео повреждено');
-        }
-        
-        // Загружаем все чанки
-        console.log('📥 Загрузка всех чанков...');
-        const allChunks = [];
-        
-        for (let i = 0; i < totalChunks; i += 20) {
-            const end = Math.min(i + 19, totalChunks - 1);
-            console.log(`Загрузка чанков ${i} - ${end}`);
-            
-            const chunks = await supabaseHelpers.getVideoChunks(videoId, i, end);
-            if (chunks && chunks.length > 0) {
-                allChunks.push(...chunks);
-            }
-            
-            // Обновляем прогресс
-            const percent = Math.floor((allChunks.length / totalChunks) * 100);
-            document.getElementById('loadingText').textContent = `Загрузка... ${allChunks.length}/${totalChunks} (${percent}%)`;
-        }
-        
-        // Сортируем чанки
-        allChunks.sort((a, b) => a.chunk_index - b.chunk_index);
-        console.log(`✅ Загружено ${allChunks.length} чанков`);
-        
-        // Собираем видео
-        console.log('🔨 Сборка видео...');
-        const binaryData = [];
-        
-        for (const chunk of allChunks) {
-            try {
-                const binaryString = atob(chunk.chunk_data);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let j = 0; j < binaryString.length; j++) {
-                    bytes[j] = binaryString.charCodeAt(j);
-                }
-                binaryData.push(bytes);
-            } catch (e) {
-                console.error('Ошибка обработки чанка:', e);
-            }
-        }
-        
-        // Создаем Blob и URL
-        const blob = new Blob(binaryData, { type: 'video/mp4' });
-        const videoUrl = URL.createObjectURL(blob);
-        
-        console.log(`✅ Видео собрано, размер: ${(blob.size / 1024 / 1024).toFixed(2)} МБ`);
-        
-        // Устанавливаем видео
-        videoPlayer.src = videoUrl;
-        
-        // Убираем индикатор загрузки
-        document.getElementById('videoLoading').style.display = 'none';
-        
-        // Показываем кнопку воспроизведения
-        showPlayButton();
-        
-        // Очищаем URL после использования
-        videoPlayer.addEventListener('ended', () => {
-            URL.revokeObjectURL(videoUrl);
-        });
-        
-        // Увеличиваем просмотры
-        await supabaseHelpers.incrementViews(videoId);
-        
-        // Загружаем рекомендации
-        loadRecommendedVideos(videoId);
-        
-    } catch (error) {
-        console.error('Ошибка:', error);
-        showNotification('Ошибка загрузки видео: ' + error.message, 'error');
-        
-        document.querySelector('.video-container').innerHTML = `
-            <div class="error-message">
-                <p>❌ Ошибка загрузки видео: ${error.message}</p>
-                <button onclick="window.location.href='/'">Вернуться на главную</button>
-            </div>
-        `;
+// Добавляем поддержку полноэкранного режима
+function enableFullscreen() {
+    if (videoPlayer.requestFullscreen) {
+        videoPlayer.requestFullscreen();
+    } else if (videoPlayer.webkitRequestFullscreen) {
+        videoPlayer.webkitRequestFullscreen();
+    } else if (videoPlayer.msRequestFullscreen) {
+        videoPlayer.msRequestFullscreen();
     }
 }
 
-// Отображение информации о видео
-function displayVideoInfo(video) {
-    document.title = `${video.title} - FreeTube`;
+// Добавляем кнопку полноэкранного режима
+function addFullscreenButton() {
+    const videoWrapper = document.querySelector('.video-wrapper');
+    const fsButton = document.createElement('button');
+    fsButton.innerHTML = '⛶';
+    fsButton.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0,0,0,0.6);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 12px;
+        font-size: 18px;
+        cursor: pointer;
+        z-index: 15;
+        transition: background 0.3s;
+    `;
     
-    document.getElementById('videoTitle').textContent = video.title || 'Без названия';
-    document.getElementById('videoDescription').textContent = video.description || 'Нет описания';
+    fsButton.onmouseover = () => {
+        fsButton.style.background = 'rgba(255,0,0,0.8)';
+    };
     
-    const channelName = video.channel_name || 'FreeTube User';
-    document.getElementById('channelName').textContent = channelName;
+    fsButton.onmouseout = () => {
+        fsButton.style.background = 'rgba(0,0,0,0.6)';
+    };
     
-    const channelAvatar = document.getElementById('channelAvatar');
-    if (channelAvatar) {
-        channelAvatar.textContent = channelName.charAt(0).toUpperCase();
-    }
+    fsButton.onclick = enableFullscreen;
     
-    const viewCount = document.getElementById('viewCount');
-    viewCount.textContent = formatViews(video.views || 0) + ' просмотров';
-    
-    const uploadDate = document.getElementById('uploadDate');
-    uploadDate.textContent = timeAgo(video.created_at);
-}
-
-// Загрузка рекомендаций
-async function loadRecommendedVideos(currentVideoId) {
-    try {
-        const { data: videos, error } = await supabaseHelpers.getRecommendedVideos(currentVideoId);
-        
-        if (error) throw error;
-        
-        const container = document.getElementById('recommendedVideos');
-        
-        if (!videos || videos.length === 0) {
-            container.innerHTML = '<p>Нет рекомендованных видео</p>';
-            return;
-        }
-        
-        container.innerHTML = videos.map(video => `
-            <div class="recommended-card" onclick="window.location.href='video.html?id=${video.id}'">
-                <div class="recommended-thumbnail">
-                    ${video.thumbnail ? 
-                        `<img src="${video.thumbnail}" style="width:100%;height:100%;object-fit:cover;" alt="${video.title}">` :
-                        `<div style="width:100%;height:100%;background:linear-gradient(45deg,#ff0000,#000);display:flex;align-items:center;justify-content:center;color:white;">📹</div>`
-                    }
-                </div>
-                <div class="recommended-info">
-                    <h4>${video.title || 'Без названия'}</h4>
-                    <p>${video.channel_name || 'FreeTube User'}</p>
-                    <p>${formatViews(video.views || 0)} просмотров</p>
-                </div>
-            </div>
-        `).join('');
-        
-    } catch (error) {
-        console.error('Ошибка загрузки рекомендаций:', error);
-        document.getElementById('recommendedVideos').innerHTML = '<p>Ошибка загрузки рекомендаций</p>';
-    }
-}
-
-// Форматирование просмотров
-function formatViews(views) {
-    if (!views) return '0';
-    if (views >= 1000000) return (views / 1000000).toFixed(1) + 'M';
-    if (views >= 1000) return (views / 1000).toFixed(1) + 'K';
-    return views.toString();
-}
-
-// Форматирование даты
-function timeAgo(date) {
-    if (!date) return 'недавно';
-    
-    try {
-        const now = new Date();
-        const past = new Date(date);
-        const seconds = Math.floor((now - past) / 1000);
-        
-        if (seconds < 60) return 'только что';
-        
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 60) {
-            return minutes + ' ' + getWord(minutes, 'минуту', 'минуты', 'минут') + ' назад';
-        }
-        
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) {
-            return hours + ' ' + getWord(hours, 'час', 'часа', 'часов') + ' назад';
-        }
-        
-        const days = Math.floor(hours / 24);
-        if (days < 7) {
-            return days + ' ' + getWord(days, 'день', 'дня', 'дней') + ' назад';
-        }
-        
-        const weeks = Math.floor(days / 7);
-        if (weeks < 5) {
-            return weeks + ' ' + getWord(weeks, 'неделю', 'недели', 'недель') + ' назад';
-        }
-        
-        const months = Math.floor(days / 30);
-        if (months < 12) {
-            return months + ' ' + getWord(months, 'месяц', 'месяца', 'месяцев') + ' назад';
-        }
-        
-        const years = Math.floor(days / 365);
-        return years + ' ' + getWord(years, 'год', 'года', 'лет') + ' назад';
-        
-    } catch (error) {
-        return 'недавно';
-    }
-}
-
-function getWord(number, form1, form2, form5) {
-    number = Math.abs(number) % 100;
-    if (number > 10 && number < 15) return form5;
-    number = number % 10;
-    if (number === 1) return form1;
-    if (number > 1 && number < 5) return form2;
-    return form5;
+    videoWrapper.appendChild(fsButton);
 }
 
 // Инициализация
@@ -294,14 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (typeof supabaseHelpers !== 'undefined') {
         console.log('✅ supabaseHelpers загружен');
-        loadVideo();
+        loadVideoWithHLS();
+        addFullscreenButton();
     } else {
         console.error('❌ supabaseHelpers не загружен!');
-        document.querySelector('.video-container').innerHTML = `
-            <div class="error-message">
-                <p>❌ Ошибка загрузки конфигурации</p>
-                <button onclick="location.reload()">Обновить</button>
-            </div>
-        `;
     }
 });
