@@ -7,6 +7,101 @@
     <link rel="stylesheet" href="css/style.css">
     <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Конфигурация Supabase -->
+    <script>
+        const SUPABASE_CONFIG = {
+            url: 'https://zsjxcrjopoxoaavmnoef.supabase.co',
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzanhjcmpvcG94b2Fhdm1ub2VmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTcyMTMsImV4cCI6MjA4Nzg3MzIxM30.MV8W9SAO3lvjLoqlQOLuGjIf3Ipa-OTJDNYVzs9Rfkc'
+        };
+
+        if (typeof supabase === 'undefined') {
+            console.error('❌ Supabase SDK не загружен!');
+            throw new Error('Supabase SDK не загружен');
+        }
+
+        const supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+
+        const supabaseHelpers = {
+            async getVideos(filter = 'all', limit = 50) {
+                try {
+                    let query = supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .eq('status', 'completed');
+                    
+                    switch(filter) {
+                        case 'latest':
+                            query = query.order('created_at', { ascending: false });
+                            break;
+                        case 'popular':
+                            query = query.order('views', { ascending: false });
+                            break;
+                        default:
+                            query = query.order('created_at', { ascending: false });
+                    }
+                    
+                    const { data, error } = await query.limit(limit);
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка получения видео:', error);
+                    return { data: null, error };
+                }
+            },
+
+            async searchVideos(searchTerm) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('*')
+                        .eq('status', 'completed')
+                        .ilike('title', `%${searchTerm}%`)
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) throw error;
+                    return { data, error: null };
+                } catch (error) {
+                    console.error('Ошибка поиска:', error);
+                    return { data: null, error };
+                }
+            },
+
+            getCurrentUser() {
+                return supabaseClient.auth.getUser();
+            },
+
+            async signOut() {
+                try {
+                    const { error } = await supabaseClient.auth.signOut();
+                    if (error) throw error;
+                    return { success: true, error: null };
+                } catch (error) {
+                    return { success: false, error };
+                }
+            },
+
+            async testConnection() {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('videos')
+                        .select('count', { count: 'exact', head: true });
+                    
+                    if (error) throw error;
+                    console.log('✅ Соединение с Supabase установлено');
+                    return true;
+                } catch (error) {
+                    console.error('❌ Ошибка соединения с Supabase:', error.message);
+                    return false;
+                }
+            }
+        };
+
+        window.supabaseClient = supabaseClient;
+        window.supabaseHelpers = supabaseHelpers;
+        supabaseHelpers.testConnection();
+        console.log('🚀 FreeTube инициализирован');
+    </script>
 </head>
 <body>
     <header>
@@ -18,9 +113,8 @@
                 <input type="text" placeholder="Поиск видео..." id="searchInput">
                 <button onclick="searchVideos()">🔍</button>
             </div>
-            <div class="nav-right">
-                <button id="uploadBtn" onclick="window.location.href='upload.html'">Загрузить</button>
-                <button id="authBtn">Войти</button>
+            <div class="nav-right" id="navRight">
+                <!-- Динамически заполняется -->
             </div>
         </nav>
     </header>
@@ -37,8 +131,36 @@
         </div>
     </main>
 
-    <!-- Подключаем скрипты -->
-    <script src="config/supabase.js"></script>
     <script src="js/main.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            const navRight = document.getElementById('navRight');
+            
+            try {
+                const { data: { user } } = await supabaseHelpers.getCurrentUser();
+                
+                if (user) {
+                    const email = user.email || 'User';
+                    const initial = email.charAt(0).toUpperCase();
+                    
+                    navRight.innerHTML = `
+                        <div class="user-info">
+                            <div class="user-avatar">${initial}</div>
+                            <span>${email}</span>
+                            <button id="uploadBtn" onclick="window.location.href='upload.html'">Загрузить</button>
+                        </div>
+                    `;
+                } else {
+                    navRight.innerHTML = `
+                        <button id="uploadBtn" onclick="window.location.href='upload.html'">Загрузить</button>
+                        <button id="authBtn" onclick="window.location.href='login.html'">Войти</button>
+                    `;
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+            }
+        });
+    </script>
 </body>
 </html>
