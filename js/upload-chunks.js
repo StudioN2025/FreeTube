@@ -5,8 +5,8 @@ let selectedFile = null;
 let videoDuration = 0;
 let videoId = null;
 
-// Размер чанка - 256 КБ (меньше = надежнее)
-const CHUNK_SIZE = 256 * 1024; // 256 КБ
+// Размер чанка - 512 КБ (можно увеличить до 1 МБ для больших файлов)
+const CHUNK_SIZE = 512 * 1024; // 512 КБ
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', function() {
@@ -69,8 +69,9 @@ function initializeEventListeners() {
 async function handleVideoSelect(file) {
     console.log('Выбран файл:', file.name, 'Размер:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
-    if (file.size > 200 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер: 200 МБ');
+    // Увеличенный лимит до 2 ГБ (2000 МБ)
+    if (file.size > 2000 * 1024 * 1024) {
+        alert('Файл слишком большой. Максимальный размер: 2 ГБ');
         return;
     }
     
@@ -136,16 +137,33 @@ async function generateThumbnail(videoFile) {
     });
 }
 
-// Функция для отправки одного чанка
-async function uploadChunk(chunkIndex, chunkData) {
-    try {
-        const { success, error } = await supabaseHelpers.saveChunk(videoId, chunkIndex, chunkData);
-        if (error) throw error;
-        return true;
-    } catch (error) {
-        console.error(`Ошибка загрузки чанка ${chunkIndex}:`, error);
-        return false;
+// Чтение чанка как Base64
+function readChunkAsBase64(chunk) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(chunk);
+    });
+}
+
+// Функция для отправки одного чанка с повторными попытками
+async function uploadChunkWithRetry(chunkIndex, chunkData, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const { success, error } = await supabaseHelpers.saveChunk(videoId, chunkIndex, chunkData);
+            if (success) return true;
+            if (i === retries - 1) throw error;
+            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Увеличиваем задержку
+        } catch (error) {
+            console.log(`Попытка ${i + 1} для чанка ${chunkIndex} не удалась`);
+            if (i === retries - 1) throw error;
+        }
     }
+    return false;
 }
 
 // Основная функция загрузки
@@ -201,7 +219,6 @@ async function startUpload() {
         
         // Шаг 3: Загружаем чанки
         let successCount = 0;
-        const chunkPromises = [];
         
         for (let i = 0; i < totalChunks; i++) {
             const start = i * CHUNK_SIZE;
@@ -211,8 +228,9 @@ async function startUpload() {
             // Конвертируем чанк в Base64
             const chunkBase64 = await readChunkAsBase64(chunk);
             
-            // Отправляем чанк
-            const success = await uploadChunk(i, chunkBase64);
+            // Отправляем чанк с повторными попытками
+            const success = await uploadChunkWithRetry(i, chunkBase64);
+            
             if (success) {
                 successCount++;
                 const percent = Math.floor((i + 1) / totalChunks * 70) + 20; // 20-90%
@@ -230,7 +248,7 @@ async function startUpload() {
         showNotification('✅ Видео успешно загружено!', 'success');
         
         setTimeout(() => {
-            window.location.href = 'index.html';
+            window.location.href = `video.html?id=${videoId}`;
         }, 2000);
         
     } catch (error) {
@@ -242,19 +260,6 @@ async function startUpload() {
         uploadBtn.querySelector('.btn-text').style.display = 'inline';
         uploadBtn.querySelector('.loading-spinner').style.display = 'none';
     }
-}
-
-// Чтение чанка как Base64
-function readChunkAsBase64(chunk) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const base64 = e.target.result.split(',')[1];
-            resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(chunk);
-    });
 }
 
 function updateProgress(percent, message) {
