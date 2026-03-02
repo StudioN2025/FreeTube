@@ -222,8 +222,14 @@
                 
                 if (error) throw error;
                 
+                // Получаем имя канала из metadata
+                const channelName = data.user.user_metadata?.channel_name || email.split('@')[0];
+                
                 successDiv.textContent = 'Успешный вход! Перенаправление...';
-                localStorage.setItem('user', JSON.stringify(data.user));
+                localStorage.setItem('user', JSON.stringify({
+                    ...data.user,
+                    channel_name: channelName
+                }));
                 
                 setTimeout(() => {
                     window.location.href = 'upload.html';
@@ -275,6 +281,7 @@
                 
                 successDiv.textContent = 'Регистрация успешна! Выполняется вход...';
                 
+                // Сразу логинимся
                 const { data: loginData, error: loginError } = await supabaseClient.auth.signInWithPassword({
                     email: email,
                     password: password
@@ -282,7 +289,10 @@
                 
                 if (loginError) throw loginError;
                 
-                localStorage.setItem('user', JSON.stringify(loginData.user));
+                localStorage.setItem('user', JSON.stringify({
+                    ...loginData.user,
+                    channel_name: name
+                }));
                 
                 setTimeout(() => {
                     window.location.href = 'upload.html';
@@ -292,15 +302,6 @@
                 errorDiv.textContent = 'Ошибка регистрации: ' + error.message;
             }
         }
-
-        async function checkSession() {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                window.location.href = 'upload.html';
-            }
-        }
-
-        checkSession();
     </script>
 </body>
 </html>
