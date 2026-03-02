@@ -11,6 +11,7 @@ let videoInfo = null;
 let videoPlayer = document.getElementById('videoPlayer');
 let isLoading = false;
 let chunks = [];
+let isVideoReady = false;
 
 // Функция показа уведомлений
 function showNotification(message, type = 'info') {
@@ -77,6 +78,51 @@ function createBlobUrlFromChunks(chunksArray) {
     }
 }
 
+// Показать кнопку воспроизведения
+function showPlayButton() {
+    const videoContainer = document.querySelector('.video-container');
+    
+    // Создаем кнопку если её нет
+    if (!document.getElementById('playButton')) {
+        const playButton = document.createElement('button');
+        playButton.id = 'playButton';
+        playButton.innerHTML = '▶ Начать просмотр';
+        playButton.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            background: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 20;
+            box-shadow: 0 4px 15px rgba(255,0,0,0.3);
+            transition: transform 0.2s;
+        `;
+        
+        playButton.addEventListener('mouseover', () => {
+            playButton.style.transform = 'translate(-50%, -50%) scale(1.05)';
+        });
+        
+        playButton.addEventListener('mouseout', () => {
+            playButton.style.transform = 'translate(-50%, -50%) scale(1)';
+        });
+        
+        playButton.addEventListener('click', () => {
+            videoPlayer.play();
+            playButton.style.display = 'none';
+        });
+        
+        videoContainer.style.position = 'relative';
+        videoContainer.appendChild(playButton);
+    }
+}
+
 // Загрузка следующей партии чанков
 async function loadNextBatch() {
     if (isLoading || loadedChunks >= totalChunks) return;
@@ -96,13 +142,32 @@ async function loadNextBatch() {
             loadedChunks = chunks.length;
             updateProgress();
             
-            // Если это первый чанк, сразу запускаем видео
-            if (loadedChunks >= 3) {
+            // Если загрузили достаточно для старта (первые 3 чанка)
+            if (loadedChunks >= 3 && !isVideoReady) {
+                isVideoReady = true;
                 const videoUrl = createBlobUrlFromChunks(chunks);
+                
                 if (videoUrl) {
                     videoPlayer.src = videoUrl;
                     document.getElementById('videoLoading').style.display = 'none';
-                    videoPlayer.play().catch(e => console.log('Автовоспроизведение заблокировано'));
+                    
+                    // Добавляем обработчик клика для воспроизведения
+                    videoPlayer.addEventListener('click', () => {
+                        videoPlayer.play();
+                    });
+                    
+                    // Показываем кнопку воспроизведения
+                    showPlayButton();
+                    
+                    // Пытаемся воспроизвести без звука (иногда работает)
+                    videoPlayer.muted = true;
+                    videoPlayer.play().then(() => {
+                        // Если получилось, убираем кнопку
+                        document.getElementById('playButton')?.remove();
+                    }).catch(() => {
+                        // Если не получилось, оставляем кнопку
+                        videoPlayer.muted = false;
+                    });
                 }
             }
             
